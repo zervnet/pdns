@@ -35,7 +35,7 @@ cp $INCLUDES $CFILES $DIRNAME
 cp Makefile-recursor $DIRNAME/Makefile
 cp Makefile-recursor.win32 $DIRNAME/Makefile.win32
 cp README-recursor $DIRNAME/README
-cp ../COPYING $DIRNAME/
+cp ../COPYING ../NOTICE $DIRNAME/
 cp config-recursor.h $DIRNAME/config.h
 mkdir -p $DIRNAME/ext/rapidjson/include/rapidjson/internal
 cp -a ext/rapidjson/include/rapidjson/*.h $DIRNAME/ext/rapidjson/include/rapidjson/
@@ -49,6 +49,8 @@ cp configure-recursor $DIRNAME/configure
 cp powerdns-example-script.lua $DIRNAME
 mkdir -p $DIRNAME/contrib
 cp ../contrib/systemd-pdns-recursor.service $DIRNAME/contrib
+mkdir -p $DIRNAME/build-scripts/redhat
+cp ../build-scripts/redhat/pdns-recursor-test.spec $DIRNAME/build-scripts/redhat
 
 mkdir -p $DIRNAME/sysdeps
 rm -f sysdeps-recursor/*~
