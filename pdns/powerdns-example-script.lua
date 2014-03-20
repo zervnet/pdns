@@ -2,6 +2,12 @@ function preresolve ( remoteip, domain, qtype )
 	print ("prequery handler called for: ", remoteip, getlocaladdress(), domain, qtype)
 	pdnslog("a test message.. received query from "..remoteip.." on "..getlocaladdress());
 
+	if domain == "www.followme.com."
+	then
+		print ("Need to CNAME www.followme.com to www.powerdns.com")
+		return "followCNAMERecords", 0, {{qtype=pdns.CNAME, content="www.powerdns.com"}}
+	end
+
 	if domain == "www.donotanswer.org."
 	then
 		print("we won't answer a query for donotanswer.org")
