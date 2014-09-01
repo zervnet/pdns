@@ -277,11 +277,11 @@ template<class Key, class Val>void MTasker<Key,Val>::makeThread(tfunc_t *start, 
   s_self = this;
  
   cothread_t uc=co_create(d_stacksize, threadWrapper);
+  d_threads[d_maxtid].context = uc;
   d_tid = d_maxtid;
   co_switch(uc); // set it up so it copies our variables
- 
- 
-  d_threads[d_maxtid].context = uc;
+  d_tid=0;
+
   d_runQueue.push(d_maxtid++); // will run at next schedule invocation
 }
 
