@@ -250,16 +250,15 @@ static __thread void* g_val;
 template<class Key, class Val>void MTasker<Key,Val>::threadWrapper()
 {
   MTasker* self=s_self;
-
   void* val = g_val;
   self->d_threads[self->d_tid].startOfStack = self->d_threads[self->d_tid].highestStackSeen = (char*)&val;
-
   void (*func)(void*)=g_func;
+  int tid = self->d_tid;
 
   co_switch(self->d_kernel); // we are ready to rumble!
 
   (*func)(val);
-  self->d_zombiesQueue.push(self->d_tid);
+  self->d_zombiesQueue.push(tid);
 
   co_switch(self->d_kernel);
 }
@@ -275,10 +274,10 @@ template<class Key, class Val>void MTasker<Key,Val>::makeThread(tfunc_t *start, 
   g_func = start;
   g_val=val;
   s_self = this;
- 
   cothread_t uc=co_create(d_stacksize, threadWrapper);
   d_threads[d_maxtid].context = uc;
   d_tid = d_maxtid;
+
   co_switch(uc); // set it up so it copies our variables
   d_tid=0;
 
@@ -307,6 +306,7 @@ template<class Key, class Val>bool MTasker<Key,Val>::schedule(struct timeval*  n
   }
   if(!d_zombiesQueue.empty()) {
     co_delete(d_threads[d_zombiesQueue.front()].context);
+    d_threads.erase(d_zombiesQueue.front());
     d_zombiesQueue.pop();
     return true;
   }
@@ -323,6 +323,7 @@ template<class Key, class Val>bool MTasker<Key,Val>::schedule(struct timeval*  n
 
     for(typename waiters_by_ttd_index_t::iterator i=ttdindex.begin(); i != ttdindex.end(); ) {
       if(i->ttd.tv_sec && i->ttd < rnow) {
+//        cerr<<"Had a timeout"<<endl;
         d_waitstatus=TimeOut;
         d_eventkey=i->key;        // pass waitEvent the exact key it was woken for
         cothread_t uc = i->context;
