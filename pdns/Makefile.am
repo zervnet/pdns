@@ -1,7 +1,7 @@
 AM_CPPFLAGS += \
 	-I$(top_srcdir)/pdns/ext/rapidjson/include \
 	$(YAHTTP_CFLAGS) \
-	$(POLARSSL_CFLAGS)
+	$(POLARSSL_CFLAGS) -I$(top_srcdir)/pdns/ext/libco
 
 AM_CXXFLAGS = \
 	-DSYSCONFDIR=\"$(sysconfdir)\" \
@@ -861,6 +861,7 @@ testrunner_SOURCES += pkcs11signers.cc pkcs11signers.hh
 testrunner_LDADD += $(P11KIT1_LIBS)
 endif
 
+<<<<<<< HEAD
 pdns_recursor_SOURCES = \
 	arguments.cc \
 	base32.cc \
@@ -916,6 +917,23 @@ pdns_recursor_LDADD = \
 if LUA
 pdns_recursor_LDADD += $(LUA_LIBS)
 endif
+=======
+pdns_recursor_SOURCES=syncres.cc resolver.hh misc.cc unix_utility.cc qtype.cc \
+logger.cc statbag.cc arguments.cc  lwres.cc pdns_recursor.cc reczones.cc lwres.hh \
+mtasker.hh syncres.hh recursor_cache.cc recursor_cache.hh dnsparser.cc \
+dnswriter.cc dnslabeltext.cc dnswriter.hh dnsrecords.cc dnsrecords.hh rcpgenerator.cc rcpgenerator.hh \
+base64.cc base64.hh zoneparser-tng.cc zoneparser-tng.hh rec_channel.cc rec_channel.hh \
+rec_channel_rec.cc selectmplexer.cc epollmplexer.cc sillyrecords.cc htimer.cc htimer.hh \
+dns_random.cc \
+lua-pdns.cc lua-pdns.hh lua-recursor.cc lua-recursor.hh randomhelper.cc  \
+recpacketcache.cc recpacketcache.hh dns.cc nsecrecords.cc base32.cc cachecleaner.hh \
+ws-recursor.cc ws-recursor.hh ws-api.cc ws-api.hh webserver.cc webserver.hh \
+json.cc json.hh version.hh version.cc responsestats.cc rec-carbon.cc ext/yahttp/yahttp/reqresp.cpp \
+ext/yahttp/yahttp/router.cpp ext/libco/amd64.c
+
+pdns_recursor_LDFLAGS= $(LUA_LIBS)
+pdns_recursor_LDADD= $(POLARSSL_LIBS) $(YAHTTP_LIBS)
+>>>>>>> initial stab at libco port of pdns_recursor
 
 pdns_control_SOURCES = \
 	arguments.cc \
