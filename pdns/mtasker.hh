@@ -23,7 +23,7 @@
 #define MTASKER_HH
 #include <stdint.h>
 #include <signal.h>
-#include <ucontext.h>
+#include "libco.h"
 #include <queue>
 #include <vector>
 #include <map>
@@ -45,13 +45,13 @@ struct KeyTag {};
 template<class EventKey=int, class EventVal=int> class MTasker
 {
 private:
-  ucontext_t d_kernel;     
+  cothread_t d_kernel;     
   std::queue<int> d_runQueue;
   std::queue<int> d_zombiesQueue;
 
   struct ThreadInfo
   {
-	ucontext_t* context;
+	cothread_t context;
 	char* startOfStack;
 	char* highestStackSeen;
   };
@@ -69,7 +69,7 @@ public:
   struct Waiter
   {
     EventKey key;
-    ucontext_t *context;
+    cothread_t context;
     struct timeval ttd;
     int tid;    
   };
@@ -92,6 +92,7 @@ public:
   MTasker(size_t stacksize=8192) : d_stacksize(stacksize)
   {
     d_maxtid=0;
+    d_kernel=co_active();
   }
 
   typedef void tfunc_t(void *); //!< type of the pointer that starts a thread 
@@ -107,7 +108,8 @@ public:
   unsigned int getMaxStackUsage();
 
 private:
-  static void threadWrapper(uint32_t self1, uint32_t self2, tfunc_t *tf, int tid, uint32_t val1, uint32_t val2);
+  static void threadWrapper();
+  static __thread MTasker* s_self;
   EventKey d_eventkey;   // for waitEvent, contains exact key it was awoken for
 };
 #include "mtasker.cc"

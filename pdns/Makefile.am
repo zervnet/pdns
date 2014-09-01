@@ -1,4 +1,4 @@
-AM_CXXFLAGS += -DSYSCONFDIR=\"$(sysconfdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" -DLOCALSTATEDIR=\"$(socketdir)\" $(THREADFLAGS) $(LUA_CFLAGS) $(SQLITE3_CFLAGS) $(POLARSSL_CFLAGS) -I$(top_srcdir)/pdns/ext/rapidjson/include -I$(top_srcdir)/pdns/ext/yahttp
+AM_CXXFLAGS += -DSYSCONFDIR=\"$(sysconfdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" -DLOCALSTATEDIR=\"$(socketdir)\" $(THREADFLAGS) $(LUA_CFLAGS) $(SQLITE3_CFLAGS) $(POLARSSL_CFLAGS) -I$(top_srcdir)/pdns/ext/rapidjson/include -I$(top_srcdir)/pdns/ext/yahttp -I$(top_srcdir)/pdns/ext/libco
 
 YAHTTP_LIBS = -Lext/yahttp/yahttp -lyahttp
 
@@ -340,7 +340,7 @@ lua-pdns.cc lua-pdns.hh lua-recursor.cc lua-recursor.hh randomhelper.cc  \
 recpacketcache.cc recpacketcache.hh dns.cc nsecrecords.cc base32.cc cachecleaner.hh \
 ws-recursor.cc ws-recursor.hh ws-api.cc ws-api.hh webserver.cc webserver.hh \
 json.cc json.hh version.hh version.cc responsestats.cc rec-carbon.cc ext/yahttp/yahttp/reqresp.cpp \
-ext/yahttp/yahttp/router.cpp
+ext/yahttp/yahttp/router.cpp ext/libco/amd64.c
 
 pdns_recursor_LDFLAGS= $(LUA_LIBS)
 pdns_recursor_LDADD= $(POLARSSL_LIBS) $(YAHTTP_LIBS)
