@@ -6,7 +6,7 @@
 
 #ifndef LIBCO_H
 #define LIBCO_H
-
+#define LIBCO_MP
 #ifdef LIBCO_C
   #ifdef LIBCO_MP
     #define thread_local __thread
