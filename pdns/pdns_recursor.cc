@@ -80,6 +80,7 @@ unsigned int g_networkTimeoutMsec;
 uint64_t g_latencyStatSize;
 bool g_logCommonErrors;
 bool g_anyToTcp;
+int g_blocktime;
 uint16_t g_udpTruncationThreshold;
 __thread shared_ptr<RecursorLua>* t_pdl;
 __thread RemoteKeeper* t_remotes;
@@ -585,7 +586,8 @@ void startDoResolve(void *p)
       }
       catch(ImmediateServFailException &e) {
         L<<Logger::Error<<t_id<<" ["<<MT->getTid()<<"] Sending SERVFAIL to "<<dc->getRemote()<<" during resolve of '"<<dc->d_mdp.d_qname<<"' because: "<<e.reason<<endl;
-	g_clientBlockList.insert(dc->d_remote, 60);
+	if(g_blocktime)
+	  g_clientBlockList.insert(dc->d_remote, g_blocktime);
         res = RCode::ServFail;
       }
 
@@ -1904,6 +1906,7 @@ int serviceMain(int argc, char*argv[])
   SyncRes::s_serverdownthrottletime=::arg().asNum("server-down-throttle-time");
   SyncRes::s_serverID=::arg()["server-id"];
   SyncRes::s_maxqperq=::arg().asNum("max-qperq");
+  g_blocktime = ::arg().asNum("client-blocktime");
   if(SyncRes::s_serverID.empty()) {
     char tmp[128];
     gethostname(tmp, sizeof(tmp)-1);
@@ -2222,6 +2225,7 @@ int main(int argc, char **argv)
     ::arg().set("udp-truncation-threshold", "Maximum UDP response size before we truncate")="1680";
     ::arg().set("minimum-ttl-override", "Set under adverse conditions, a minimum TTL")="0";
     ::arg().set("max-qperq", "Maximum outgoing queries per query")="50";
+    ::arg().set("client-blocktime", "If a client misbehaved, block for this many seconds")="60";
 
     ::arg().set("include-dir","Include *.conf files from this directory")="";
     ::arg().set("security-poll-suffix","Domain name from which to query security update notifications")="secpoll.powerdns.com.";
