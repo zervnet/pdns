@@ -98,6 +98,8 @@ int asyncresolve(const ComboAddress& ip, const string& domain, int type, bool do
     
     ret=arecvfrom(reinterpret_cast<char *>(buf.get()), bufsize-1,0, ip, &len, pw.getHeader()->id, 
                   domain, type, queryfd, now);
+    if(ret==-2)
+      throw ImmediateServFailException("got killed resolving name "+domain);
   }
   else {
     try {
