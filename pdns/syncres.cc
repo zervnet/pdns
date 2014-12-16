@@ -962,7 +962,7 @@ int SyncRes::doResolveAt(set<string, CIStringCompare> nameservers, string auth, 
               }
               continue;
             }
-
+	    if(d_timeouts + 0.5*d_throttledqueries > 6.0) throw ImmediateServFailException("Too much work resolving "+qname);
             if(lwr.d_rcode==RCode::ServFail || lwr.d_rcode==RCode::Refused) {
               LOG(prefix<<qname<<": "<<*tns<<" returned a "<< (lwr.d_rcode==RCode::ServFail ? "ServFail" : "Refused") << ", trying sibling IP or NS"<<endl);
               t_sstorage->throttle.throttle(d_now.tv_sec,boost::make_tuple(*remoteIP, qname, qtype.getCode()),60,3); // servfail or refused
