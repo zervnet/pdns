@@ -441,6 +441,13 @@ int arecvfrom(char *data, int len, int flags, const ComboAddress& fromaddr, int 
     if(packet.empty()) // means "error"
       return -1; 
 
+    if(packet=="kill") {
+      if(fd >= 0)
+	t_udpclientsocks->returnSocket(fd);
+
+      return -2;
+    }
+
     *d_len=(int)packet.size();
     memcpy(data,packet.c_str(),min(len,*d_len));
     if(*nearMissLimit && pident.nearMisses > *nearMissLimit) {
@@ -892,7 +899,8 @@ void handleNewTCPQuestion(int fd, FDMultiplexer::funcparam_t& )
     t_fdm->setReadTTD(tc->getFD(), now, g_tcpTimeout);
   }
 }
- 
+
+void doResends(MT_t::waiters_t::iterator& iter, PacketID resend, const string& content); 
 string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fromaddr, int fd)
 {
   ++g_stats.qcounter;
@@ -924,9 +932,22 @@ string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fr
     return 0;
   }
   
+
+
   if(MT->numProcesses() > g_maxMThreads) {
+    MT_t::waiters_t::iterator toKill;
+    int lowest=std::numeric_limits<int>::max();  // attempt to kill oldest question waiting for a packet
+    for(MT_t::waiters_t::iterator mthread=MT->d_waiters.begin(); mthread!=MT->d_waiters.end(); ++mthread) {
+      const PacketID& pident = mthread->key;
+      if(pident.fd >= 0 && mthread->tid < lowest) {
+	lowest = mthread->tid;
+	toKill=mthread;
+      }
+    }
+    string gone("kill");
+    doResends(toKill, toKill->key, gone);
+    MT->sendEvent(toKill->key, &gone);
     g_stats.overCapacityDrops++;
-    return 0;
   }
   
   DNSComboWriter* dc = new DNSComboWriter(question.c_str(), question.size(), g_now);
