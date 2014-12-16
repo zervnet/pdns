@@ -60,6 +60,7 @@
 #include "zoneparser-tng.hh"
 #include "rec_channel.hh"
 #include "logger.hh"
+#include "addrquench.hh"
 #include "iputils.hh"
 #include "mplexer.hh"
 #include "config.h"
@@ -98,6 +99,8 @@ struct ThreadPipeSet
 vector<ThreadPipeSet> g_pipes; // effectively readonly after startup
 
 SyncRes::domainmap_t* g_initialDomainMap; // new threads needs this to be setup
+
+AddressQuencher g_clientBlockList;
 
 #include "namespaces.hh"
 
@@ -574,8 +577,8 @@ void startDoResolve(void *p)
         res = sr.beginResolve(dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), dc->d_mdp.d_qclass, ret);
       }
       catch(ImmediateServFailException &e) {
-        L<<Logger::Error<<"Sending SERVFAIL to "<<dc->getRemote()<<" during resolve of '"<<dc->d_mdp.d_qname<<"' because: "<<e.reason<<endl;
-
+        L<<Logger::Error<<t_id<<" ["<<MT->getTid()<<"] Sending SERVFAIL to "<<dc->getRemote()<<" during resolve of '"<<dc->d_mdp.d_qname<<"' because: "<<e.reason<<endl;
+	g_clientBlockList.insert(dc->d_remote, 60);
         res = RCode::ServFail;
       }
 
@@ -952,6 +955,15 @@ void handleNewUDPQuestion(int fd, FDMultiplexer::funcparam_t& var)
       g_stats.unauthorizedUDP++;
       return;
     }
+
+    if(g_clientBlockList.present(fromaddr, g_now.tv_sec)) {
+      if(!g_quiet) 
+        L<<Logger::Error<<"["<<MT->getTid()<<"] dropping UDP query from "<<fromaddr.toString()<<", address part of temporary blocklist"<<endl;
+
+      g_stats.clientBlocks++;
+      return;
+    }
+
     BOOST_STATIC_ASSERT(offsetof(sockaddr_in, sin_port) == offsetof(sockaddr_in6, sin6_port));
     if(!fromaddr.sin4.sin_port) { // also works for IPv6
      if(!g_quiet) 

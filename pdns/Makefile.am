@@ -882,6 +882,8 @@ testrunner_LDADD += $(P11KIT1_LIBS)
 endif
 
 pdns_recursor_SOURCES = \
+	addrquench.cc \
+	addrquench.hh \
 	arguments.cc \
 	base32.cc \
 	base64.cc base64.hh \
