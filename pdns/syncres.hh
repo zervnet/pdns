@@ -18,6 +18,7 @@
 #include <boost/tuple/tuple.hpp>
 #include <boost/optional.hpp>
 #include <boost/tuple/tuple_comparison.hpp>
+#include "addrquench.hh"
 #include "mtasker.hh"
 #include "iputils.hh"
 
@@ -550,6 +551,7 @@ struct RecursorStats
   uint64_t unauthorizedUDP;  // when this is increased, qcounter isn't
   uint64_t unauthorizedTCP;  // when this is increased, qcounter isn't
   uint64_t policyDrops;
+  uint64_t clientBlocks;
   uint64_t tcpClientOverflow;
   uint64_t clientParseError;
   uint64_t serverParseError;
@@ -621,6 +623,7 @@ string doTraceRegex(vector<string>::const_iterator begin, vector<string>::const_
 void parseACLs();
 extern RecursorStats g_stats;
 extern unsigned int g_numThreads;
+extern AddressQuencher g_clientBlockList;
 
 std::string reloadAuthAndForwards();
 ComboAddress parseIPAndPort(const std::string& input, uint16_t port);

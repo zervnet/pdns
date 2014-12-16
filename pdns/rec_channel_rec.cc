@@ -13,6 +13,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/foreach.hpp>
 #include <sys/types.h>
+#include "addrquench.hh"
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "logger.hh"
@@ -549,7 +550,7 @@ RecursorControlParser::RecursorControlParser()
   addGetStat("unreachables", &SyncRes::s_unreachables);
   addGetStat("chain-resends", &g_stats.chainResends);
   addGetStat("tcp-clients", boost::bind(TCPConnection::getCurrentConnections));
-
+  addGetStat("client-blocks", boost::bind(&AddressQuencher::size, g_clientBlockList));
   addGetStat("edns-ping-matches", &g_stats.ednsPingMatches);
   addGetStat("edns-ping-mismatches", &g_stats.ednsPingMismatches);
 
