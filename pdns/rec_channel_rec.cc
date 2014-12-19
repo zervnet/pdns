@@ -303,20 +303,21 @@ static uint64_t calculateUptime()
 static string* pleaseGetCurrentQueries()
 {
   ostringstream ostr;
-
   ostr << MT->d_waiters.size() <<" currently outstanding questions\n";
 
-  boost::format fmt("%1% %|40t|%2% %|47t|%3% %|63t|%4% %|68t|%5%\n");
+  boost::format fmt("%1% %2% %|40t|%3% %|47t|%4% %|63t|%5% %|68t|%6%\n");
 
-  ostr << (fmt % "qname" % "qtype" % "remote" % "tcp" % "chained");
+  ostr << (fmt % "tid" % "qname" % "qtype" % "remote" % "tcp" % "chained");
   int n=0;
-  for(MT_t::waiters_t::iterator mthread=MT->d_waiters.begin(); mthread!=MT->d_waiters.end() && n < 100; ++mthread, ++n) {
+  for(MT_t::waiters_t::iterator mthread=MT->d_waiters.begin(); mthread!=MT->d_waiters.end(); ++mthread, ++n) {
     const PacketID& pident = mthread->key;
-    ostr << (fmt 
+    if(n<100)
+    ostr << (fmt % mthread->tid 
              % pident.domain % DNSRecordContent::NumberToType(pident.type) 
              % pident.remote.toString() % (pident.sock ? 'Y' : 'n')
              % (pident.fd == -1 ? 'Y' : 'n')
              );
+
   }
   ostr <<" - done\n";
   return new string(ostr.str());
