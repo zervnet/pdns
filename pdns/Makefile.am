@@ -1,7 +1,11 @@
+<<<<<<< HEAD
 AM_CPPFLAGS += \
 	-I$(top_srcdir)/pdns/ext/rapidjson/include \
 	$(YAHTTP_CFLAGS) \
 	$(POLARSSL_CFLAGS) -I$(top_srcdir)/pdns/ext/libco
+=======
+AM_CXXFLAGS += -DSYSCONFDIR=\"$(sysconfdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" -DLOCALSTATEDIR=\"$(socketdir)\" $(THREADFLAGS) $(LUA_CFLAGS) $(SQLITE3_CFLAGS) $(POLARSSL_CFLAGS) -I$(top_srcdir)/pdns/ext/rapidjson/include -I$(top_srcdir)/pdns/ext/yahttp -I$(top_srcdir)/pdns/ext/libco
+>>>>>>> 49f6450449848c0a57992f8f04fa438cabab7f91
 
 AM_CXXFLAGS = \
 	-DSYSCONFDIR=\"$(sysconfdir)\" \
