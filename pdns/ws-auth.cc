@@ -526,8 +526,8 @@ static void updateDomainSettingsFromDocument(const DomainInfo& di, const DNSName
 }
 
 static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
-  if(req->method != "GET")
-    throw ApiException("Only GET is implemented");
+  if(req->method != "GET" && req->method != "POST")
+    throw ApiException("Only GET and POST are implemented");
 
   bool inquireSingleKey = false;
   unsigned int inquireKeyId = 0;
@@ -536,6 +536,9 @@ static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
     inquireKeyId = std::stoi(req->parameters["key_id"]);
   }
 
+  if (inquireSingleKey && req->method == "POST")
+    throw HttpMethodNotAllowedException();
+
   DNSName zonename = apiZoneIdToName(req->parameters["id"]);
 
   UeberBackend B;
@@ -543,6 +546,76 @@ static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
   DomainInfo di;
   if(!B.getDomainInfo(zonename, di))
     throw HttpNotFoundException();
+
+  if (req->method == "POST") {
+    auto document = req->json();
+    auto content = document["content"];
+
+    bool active = boolFromJson(document, "active", false);
+
+    bool keyOrZone;
+    if (stringFromJson(document, "keytype") == "ksk") {
+      keyOrZone = true;
+    } else if (stringFromJson(document, "keytype") == "zsk") {
+      keyOrZone = false;
+    } else {
+      throw ApiException("Invalid keytype: " + stringFromJson(document, "keytype"));
+    }
+    DNSSECKeeper::keyset_t keyset=dk.getKeys(zonename, false);
+    std::vector<unsigned int> ids;
+    for (const auto& value : keyset) {
+      ids.push_back(value.second.id);
+    }
+
+
+    if (content.is_null()) {
+      int bits = intFromJson(document, "bits", 0);
+
+      int algorithm = 13; // ecdsa256
+      auto providedAlgo = document["algo"];
+      if (providedAlgo.is_string()) {
+        int tmpAlgo = DNSSECKeeper::shorthand2algorithm(providedAlgo.string_value());
+        if (tmpAlgo == -1)
+          throw ApiException("Unknown algorithm: " + providedAlgo.string_value());
+        algorithm = tmpAlgo;
+      } else if (providedAlgo.is_number()) {
+        algorithm = providedAlgo.int_value();
+      }
+
+      if (!dk.addKey(zonename, keyOrZone, algorithm, bits, active))
+        throw ApiException("Adding key failed, perhaps DNSSEC not enabled in configuration?");
+    } else {
+      auto keyData = stringFromJson(document, "content");
+      DNSKEYRecordContent dkrc;
+      shared_ptr<DNSCryptoKeyEngine> dke(DNSCryptoKeyEngine::makeFromISCString(dkrc, keyData));
+      DNSSECPrivateKey dpk;
+      dpk.d_algorithm = dkrc.d_algorithm;
+      if(dpk.d_algorithm == 7)
+        dpk.d_algorithm = 5;
+
+      if (keyOrZone)
+        dpk.d_flags = 257;
+      else
+        dpk.d_flags = 256;
+
+      dpk.setKey(dke);
+      if (!dk.addKey(zonename, dpk, active))
+        throw ApiException("Adding key failed, perhaps DNSSEC not enabled in configuration?");
+    }
+    resp->status = 201;
+    keyset=dk.getKeys(zonename, false);
+    for (const auto& value : keyset) {
+      if (std::find(ids.begin(), ids.end(), value.second.id) == ids.end()) {
+        inquireSingleKey = true;
+        inquireKeyId = value.second.id;
+        break;
+      }
+    }
+    if (!inquireSingleKey)
+      return;
+    // TODO Better to get the id of the key directly from addKey
+    // Return value of POST is equivalent to GET for a specific key, so continue
+  }
 
   DNSSECKeeper::keyset_t keyset=dk.getKeys(zonename, false);
 
@@ -578,7 +651,7 @@ static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
     }
 
     if (inquireSingleKey) {
-      key["privatekey"] = value.first.getKey()->convertToISC();
+      key["content"] = value.first.getKey()->convertToISC();
       resp->setBody(key);
       return;
     }
