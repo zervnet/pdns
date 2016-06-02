@@ -49,6 +49,7 @@ override_dh_auto_configure:
 		--with-pgsql-includes=`pg_config --includedir` \
 		--enable-botan1.10 \
 		--enable-tools \
+		--without-protobuf \
 		--enable-unit-tests \
 		$(ENABLE_SYSTEMD)
 
@@ -74,7 +75,6 @@ override_dh_installinit:
 override_dh_install:
 	dh_install
 	./pdns/pdns_server --no-config --config | sed \
-	  -e 's!# config-dir=.*!config-dir=/etc/powerdns!' \
 	  -e 's!# daemon=.*!daemon=yes!' \
 	  -e 's!# guardian=.*!guardian=yes!' \
 	  -e 's!# include-dir=.*!&\ninclude-dir=/etc/powerdns/pdns.d!' \

@@ -171,6 +171,7 @@ export CPPFLAGS="-DLDAP_DEPRECATED"
 	--with-lua \
 	--with-dynmodules='%{backends} random' \
 	--enable-tools \
+	--without-protobuf \
 	--enable-remotebackend-http \
 	--enable-unit-tests
 
@@ -183,6 +184,7 @@ make install DESTDIR=%{buildroot}
 %{__install} -p -D -m 0755 pdns/pdns %{buildroot}%{_initrddir}/pdns
 %{buildroot}/usr/sbin/pdns_server --no-config --config > %{buildroot}%{_sysconfdir}/%{name}/pdns.conf
 %{__rm} %{buildroot}%{_sysconfdir}/%{name}/pdns.conf-dist
+%{__rm} %{buildroot}/usr/bin/stubquery
 
 chmod 600 %{buildroot}%{_sysconfdir}/%{name}/pdns.conf
 
@@ -438,6 +440,7 @@ export CPPFLAGS="-DLDAP_DEPRECATED"
 	--with-lua \
 	--with-dynmodules='%{backends} random' \
 	--enable-tools \
+	--without-protobuf \
 	--enable-unit-tests \
 	--enable-systemd
 
@@ -449,7 +452,6 @@ make install DESTDIR=%{buildroot}
 %{__rm} -f %{buildroot}%{_libdir}/%{name}/*.la
 %{__rm} -rf %{buildroot}%{_docdir}
 %{buildroot}/usr/sbin/pdns_server --no-config --config | sed \
-  -e 's!# config-dir=.*!config-dir=%{_sysconfdir}%{name}!' \
   -e 's!# daemon=.*!daemon=no!' \
   -e 's!# guardian=.*!guardian=no!' \
   -e 's!# launch=.*!&\\nlaunch=!' \
@@ -457,6 +459,7 @@ make install DESTDIR=%{buildroot}
   -e 's!# setuid=.*!setuid=pdns!' \
   > %{buildroot}%{_sysconfdir}/%{name}/pdns.conf
 %{__rm} %{buildroot}%{_sysconfdir}/%{name}/pdns.conf-dist
+%{__rm} %{buildroot}/usr/bin/stubquery
 
 chmod 600 %{buildroot}%{_sysconfdir}/%{name}/pdns.conf
 
@@ -499,6 +502,7 @@ exit 0
 %{_mandir}/man1/pdns-zone2ldap.1.gz
 %{_mandir}/man1/pdnsutil.1.gz
 %{_unitdir}/pdns.service
+%{_unitdir}/pdns@.service
 %dir %{_libdir}/%{name}/
 %{_libdir}/%{name}/librandombackend.so
 %dir %{_sysconfdir}/%{name}/
@@ -694,6 +698,7 @@ export CPPFLAGS="-DLDAP_DEPRECATED"
 	--with-lua \
 	--with-dynmodules='%{backends} random' \
 	--enable-tools \
+	--without-protobuf \
 	--enable-unit-tests \
 	--enable-systemd
 
@@ -705,7 +710,6 @@ make install DESTDIR=%{buildroot}
 %{__rm} -f %{buildroot}%{_libdir}/%{name}/*.la
 %{__rm} -rf %{buildroot}/usr/share/doc
 %{buildroot}/usr/sbin/pdns_server --no-config --config | sed \
-  -e 's!# config-dir=.*!config-dir=%{_sysconfdir}%{name}!' \
   -e 's!# daemon=.*!daemon=yes!' \
   -e 's!# guardian=.*!guardian=yes!' \
   -e 's!# launch=.*!&\\nlaunch=!' \
@@ -713,6 +717,7 @@ make install DESTDIR=%{buildroot}
   -e 's!# setuid=.*!setuid=pdns!' \
   > %{buildroot}%{_sysconfdir}/%{name}/pdns.conf
 %{__rm} %{buildroot}%{_sysconfdir}/%{name}/pdns.conf-dist
+%{__rm} %{buildroot}/usr/bin/stubquery
 
 chmod 600 %{buildroot}%{_sysconfdir}/%{name}/pdns.conf
 
@@ -757,6 +762,7 @@ exit 0
 %{_mandir}/man1/pdns-zone2ldap.1.gz
 %{_mandir}/man1/pdnsutil.1.gz
 %{_unitdir}/pdns.service
+%{_unitdir}/pdns@.service
 %dir %{_libdir}/%{name}/
 %{_libdir}/%{name}/librandombackend.so
 %dir %{_sysconfdir}/%{name}/

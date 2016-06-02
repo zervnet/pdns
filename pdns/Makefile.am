@@ -90,6 +90,7 @@ bin_PROGRAMS += \
 	nproxy \
 	nsec3dig \
 	saxfr \
+	stubquery \
 	ixplore \
 	sdig
 
@@ -117,6 +118,7 @@ EXTRA_PROGRAMS = \
 	nproxy \
 	nsec3dig \
 	saxfr \
+	stubquery \
 	sdig \
 	speedtest \
 	testrunner \
@@ -493,6 +495,30 @@ kvresp_SOURCES = \
 	unix_utility.cc \
 	qtype.cc 
 
+stubquery_SOURCES = \
+	arguments.cc arguments.hh \
+	base32.cc \
+	base64.cc \
+	dns_random.cc \
+	dnslabeltext.cc \
+	dnsname.cc \
+	dnsparser.cc \
+	dnsrecords.cc \
+	dnswriter.cc \
+	logger.cc \
+	misc.cc \
+	nsecrecords.cc \
+	qtype.cc \
+	rcpgenerator.cc \
+	sillyrecords.cc \
+	statbag.cc \
+	stubresolver.cc stubresolver.hh \
+	stubquery.cc \
+	unix_utility.cc
+
+stubquery_LDADD = $(OPENSSL_LIBS)
+stubquery_LDFLAGS = $(AM_LDFLAGS) $(OPENSSL_LDFLAGS)
+
 saxfr_SOURCES = \
 	base32.cc \
 	base64.cc base64.hh \
@@ -805,7 +831,6 @@ comfun_LDFLAGS = \
 	$(BOOST_PROGRAM_OPTIONS_LDFLAGS)
 
 comfun_LDADD = \
-	$(MBEDTLS_LIBS) \
 	$(OPENSSL_LIBS) \
 	$(BOOST_PROGRAM_OPTIONS_LIBS)
 
@@ -1079,6 +1104,7 @@ testrunner_SOURCES = \
 	dnswriter.cc \
 	ednsoptions.cc ednsoptions.hh \
 	ednssubnet.cc \
+	gettime.cc gettime.hh \
 	gss_context.cc gss_context.hh \
 	iputils.cc \
 	logger.cc \
@@ -1187,8 +1213,14 @@ if HAVE_SYSTEMD
 pdns.service: pdns.service.in
 	$(AM_V_GEN)sed -e 's![@]sbindir[@]!$(sbindir)!' < $< > $@
 
+pdns@.service: pdns.service
+	$(AM_V_GEN)sed -e 's!/pdns_server!& --config-name=%i!' \
+	  -e 's!Authoritative Server!& %i!' \
+	  < $< > $@
+
 systemdsystemunitdir = $(SYSTEMD_DIR)
 
 systemdsystemunit_DATA = \
-	pdns.service
+	pdns.service \
+	pdns@.service
 endif
