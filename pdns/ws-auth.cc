@@ -525,7 +525,7 @@ static void updateDomainSettingsFromDocument(const DomainInfo& di, const DNSName
   }
 }
 
-static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
+static void apiZoneCryptokeysGET(HttpRequest* req, HttpResponse* resp) {
   if(req->method != "GET")
     throw ApiException("Only GET is implemented");
 
@@ -590,6 +590,51 @@ static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
     throw HttpNotFoundException();
   }
   resp->setBody(doc);
+}
+
+/*
+ * This method handles DELETE requests for URL /api/v1/servers/:server_id/zones/:zone_name/cryptokeys/:cryptokey_id .
+ * It deletes a key from :zone_name specified by :cryptokey_id.
+ * Server Answers:
+ * Case 1: zone_name not found
+ *      The server returns 404 Not Found
+ * Case 2: the backend returns true on removal. This means the key is gone.
+ *      The server returns 204 No Content
+ * Case 3: the backend returns false on removal. An error occoured.
+ *      The sever returns 422 Unknown Status with message "Could not DELETE :cryptokey_id"
+ * */
+static void apiZoneCryptokeysDELETE(HttpRequest *req, HttpResponse *resp) {
+  if (!req->parameters.count("key_id"))
+    throw HttpBadRequestException();
+  unsigned int inquireKeyId = 0;
+  inquireKeyId = std::stoi(req->parameters["key_id"]);
+  DNSName zonename = apiZoneIdToName(req->parameters["id"]);
+  UeberBackend B;
+  DNSSECKeeper dk(&B);
+  DomainInfo di;
+  if (!B.getDomainInfo(zonename, di))
+    throw HttpNotFoundException();
+  if (dk.removeKey(zonename, inquireKeyId)) {
+    resp->setSuccessResult("OK", 200);
+  } else {
+    resp->setErrorResult("Could not DELETE " + req->parameters["key_id"], 422);
+  }
+
+
+}
+
+/*
+ * This method choose the right functionality for the request. It also checks for a cryptokey_id which has to be passed
+ * by URL /api/v1/servers/:server_id/zones/:zone_name/cryptokeys/:cryptokey_id .
+ * */
+static void apiZoneCryptokeys(HttpRequest *req, HttpResponse *resp) {
+  if (req->method == "GET") {
+    apiZoneCryptokeysGET(req, resp);
+  } else if (req->method == "DELETE") {
+    apiZoneCryptokeysDELETE(req, resp);
+  } else {
+    throw HttpException(501); //Returns not implemented
+  }
 }
 
 static void gatherRecordsFromZone(const std::string& zonestring, vector<DNSResourceRecord>& new_records, DNSName zonename) {
