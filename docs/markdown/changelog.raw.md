@@ -1,7 +1,21 @@
 **Note**: Beyond PowerDNS 2.9.20, the Authoritative Server and Recursor are released separately.
 
+# PowerDNS Authoritative Server 3.4.9
+Released 17th of May 2016
+
+This is a minor bugfix and performance release. Two contributions by Kees Monshouwer make 3.4.9 fully compatible with the new single key ECDSA default that is coming in version 4.0.0.
+
+Changes since 3.4.8:
+
+- [commit 4627ea0](https://github.com/PowerDNS/pdns/commit/4627ea0), [commit 8350828](https://github.com/PowerDNS/pdns/commit/8350828): use OpenSSL for ECDSA signing where available (Kees Monshouwer)
+- [commit 558ff84](https://github.com/PowerDNS/pdns/commit/558ff84): allow common signing key (Kees Monshouwer)
+- [commit 280d665](https://github.com/PowerDNS/pdns/commit/280d665): Add a disable-syslog setting
+- [commit 58d6ab6](https://github.com/PowerDNS/pdns/commit/58d6ab6): fix SOA caching with multiple backends (Kees Monshouwer)
+- [commit e9e413f](https://github.com/PowerDNS/pdns/commit/e9e413f), [commit 6af4652](https://github.com/PowerDNS/pdns/commit/6af4652): whitespace-related zone parsing fixes [ticket #3568](https://github.com/PowerDNS/pdns/issues/3568)
+- [commit 7473a5e](https://github.com/PowerDNS/pdns/commit/7473a5e): bindbackend: fix, set domain in list() (Kees Monshouwer)
+
 # PowerDNS Recursor 4.0.0
-UNRELEASED - trial packages on [our builder](https://builder.powerdns.com) and on [our repositories](https://repo.powerdns.com).
+UNRELEASED - trial packages on [our repositories](https://repo.powerdns.com).
 
 PowerDNS Recursor 4.0.0 is part of [the great 4.x "Spring Cleaning"](http://blog.powerdns.com/2015/11/28/powerdns-spring-cleaning/) of PowerDNS which lasted through the end of 2015.
 
@@ -20,7 +34,7 @@ In addition to this cleanup, which has many internal benefits and solves longsta
 - RPZ aka Response Policy Zone support
 - IXFR slaving in the PowerDNS Recursor for RPZ
 - DNSSEC processing in Recursor (Authoritative has had this for years)
-- DNSSEC validation
+- DNSSEC validation (without NSEC(3) proof validation)
 - EDNS Client Subnet support in PowerDNS Recursor (Authoritative has had this for years)
 - Lua asynchronous queries for per-IP/per-domain status
 - Caches that can now be wiped per whole zone instead of per name
@@ -30,9 +44,22 @@ In addition to this cleanup, which has many internal benefits and solves longsta
 
 Please be aware that beyond the items listed here, there have been heaps of tiny changes. As always, please carefully test a new release before deploying it.
 
-As of alpha3, we are aware of the following brokenness:
+## PowerDNS Recursor 4.0.0-beta1
+Released May 27th 2016
 
-- The validator misjudges the DNSSEC status of some domains. Please report such errors if you find them.
+This release fixes a bug in the DNSSEC implementation where a name would we validated as bogus when talking to non-compliant authoritative servers:
+
+- [#3875](https://github.com/PowerDNS/pdns/pull/3875) Disable DNSSEC for domain where the auth responds with FORMERR or NOTIMP
+
+## Improvements
+
+- [#3866](https://github.com/PowerDNS/pdns/pull/3866) Increase max FDs in systemd unit file
+- [#3905](https://github.com/PowerDNS/pdns/pull/3905) Add a dnssec=process-no-validate option and make it default
+
+## Bug fixes
+
+- [#3881](https://github.com/PowerDNS/pdns/pull/3881) Fix the `noEdnsOutQueries` counter
+- [#3892](https://github.com/PowerDNS/pdns/pull/3892) support `clock_gettime` for platforms that require -lrt
 
 ## PowerDNS Recursor 4.0.0-alpha3
 Released May 10th 2016
@@ -143,12 +170,28 @@ Important changes:
 - Crypto++ and mbedTLS support is dropped, these are replaced by OpenSSL
 - The INCEPTION, INCEPTION-WEEK and EPOCH SOA-EDIT metadata values are marked as deprecated and will be removed in 4.1
 
-There are several **known issues** that will be fixed before the final 4.0.0 release:
+There is one **known issue** that will be fixed before the final 4.0.0 release:
 
 - There is no dynamic signing of synthesized records from ALIAS, these are only signed on outgoing AXFR
-- Several thrown exceptions are not caught, causing program abortion. Please run inside a supervisor or the guardian and reports these exceptions.
 
 to be continued....
+
+## PowerDNS Authoritative Server 4.0.0-beta1
+Released May 27th 2016
+
+This release features several small fixes and deprecations.
+
+## Improvements and Additions
+
+- [#3851](https://github.com/PowerDNS/pdns/pull/3851) Disable algorithm 13 and 14 if OpenSSL does not support ecdsa or the required curves (Kees Monshouwer)
+- [#3857](https://github.com/PowerDNS/pdns/pull/3857) Add simple stubquery tool for testing the stubresolver
+- [#3859](https://github.com/PowerDNS/pdns/pull/3859) build scripts: Stop patching config-dir in pdns.conf (Christian Hofstaedtler)
+- [#3872](https://github.com/PowerDNS/pdns/pull/3872) Add support for multiple carbon servers
+- [#3901](https://github.com/PowerDNS/pdns/pull/3901) Add support for virtual hosting with systemd
+
+## Bug fixes
+
+- [#3856](https://github.com/PowerDNS/pdns/pull/3856) Deal with unset name in nproxy replies
 
 ## PowerDNS Authoritative Server 4.0.0-alpha3
 Released May 11th 2016
@@ -165,7 +208,7 @@ Notable changes since 4.0.0-alpha2
 ### Bug fixes
 
 - [#3553](https://github.com/PowerDNS/pdns/pull/3553) pdnsutil: properly show key sizes for presigned zones in show-zone
-- [#3507](https://github.com/PowerDNS/pdns/pull/3553) webserver: mask out the api-key setting (Christian Hofstaedtler)
+- [#3507](https://github.com/PowerDNS/pdns/pull/3507) webserver: mask out the api-key setting (Christian Hofstaedtler)
 - [#3580](https://github.com/PowerDNS/pdns/pull/3580) bindbackend: set domain in list() (Kees Monshouwer)
 - [#3595](https://github.com/PowerDNS/pdns/pull/3595) pdnsutil: add NS record without trailing dot with create-zone
 - [#3653](https://github.com/PowerDNS/pdns/pull/3653) Allow tabs as whitespace in zonefiles

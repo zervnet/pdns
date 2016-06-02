@@ -80,6 +80,7 @@ pdns_recursor_SOURCES = \
 	ednsoptions.cc ednsoptions.hh \
 	ednssubnet.cc ednssubnet.hh \
 	filterpo.cc filterpo.hh \
+	gettime.cc gettime.hh \
 	gss_context.cc gss_context.hh \
 	iputils.hh iputils.cc \
 	ixfr.cc ixfr.hh \
@@ -121,7 +122,6 @@ pdns_recursor_SOURCES = \
 	sillyrecords.cc \
 	sortlist.cc sortlist.hh \
 	sstuff.hh \
-	statbag.hh statbag.cc \
 	syncres.cc syncres.hh \
 	ueberbackend.hh \
 	unix_utility.cc \
@@ -138,7 +138,8 @@ pdns_recursor_LDADD = \
 	$(JSON11_LIBS) \
 	$(OPENSSL_LIBS) \
 	$(BOOST_CONTEXT_LIBS) \
-	$(SYSTEMD_LIBS)
+	$(SYSTEMD_LIBS) \
+	$(RT_LIBS)
 
 pdns_recursor_LDFLAGS = $(AM_LDFLAGS) \
 	$(OPENSSL_LDFLAGS)
@@ -195,7 +196,6 @@ rec_control_SOURCES = \
 	qtype.cc \
 	rec_channel.cc rec_channel.hh \
 	rec_control.cc \
-	statbag.cc \
 	unix_utility.cc
 
 dnslabeltext.cc: dnslabeltext.rl

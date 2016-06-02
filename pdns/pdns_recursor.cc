@@ -81,6 +81,7 @@ extern SortList g_sortlist;
 #include "validate-recursor.hh"
 #include "rec-lua-conf.hh"
 #include "ednsoptions.hh"
+#include "gettime.hh"
 
 #ifdef HAVE_PROTOBUF
 #include <boost/uuid/uuid.hpp>
@@ -90,11 +91,6 @@ extern SortList g_sortlist;
 
 #ifdef HAVE_SYSTEMD
 #include <systemd/sd-daemon.h>
-#endif
-
-#ifndef RECURSOR
-#include "statbag.hh"
-StatBag S;
 #endif
 
 __thread FDMultiplexer* t_fdm;
@@ -648,7 +644,7 @@ static void protobufFillMessageFromDC(PBDNSMessage& message, const DNSComboWrite
   }
 
   struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
+  gettime(&ts, true);
   message.set_timesec(ts.tv_sec);
   message.set_timeusec(ts.tv_nsec / 1000);
   message.set_id(ntohs(dc->d_mdp.d_header.id));
@@ -710,6 +706,7 @@ void startDoResolve(void *p)
 
     auto luaconfsLocal = g_luaconfs.getLocal();
     std::string appliedPolicy;
+    std::vector<std::string> policyTags;
 #ifdef HAVE_PROTOBUF
     PBDNSMessage_DNSResponse protobufResponse;
     if(luaconfsLocal->protobufServer) {
@@ -834,7 +831,7 @@ void startDoResolve(void *p)
     }
 
 
-    if(!t_pdl->get() || !(*t_pdl)->preresolve(dc->d_remote, dc->d_local, dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), ret, dc->d_ednsOpts.empty() ? 0 : &dc->d_ednsOpts, dc->d_tag, res, &variableAnswer)) {
+    if(!t_pdl->get() || !(*t_pdl)->preresolve(dc->d_remote, dc->d_local, dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), ret, dc->d_ednsOpts.empty() ? 0 : &dc->d_ednsOpts, dc->d_tag, &appliedPolicy, &policyTags, res, &variableAnswer)) {
       try {
         res = sr.beginResolve(dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), dc->d_mdp.d_qclass, ret);
       }
@@ -902,7 +899,7 @@ void startDoResolve(void *p)
 	  (*t_pdl)->nxdomain(dc->d_remote, dc->d_local, dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), ret, res, &variableAnswer);
 	
 
-	(*t_pdl)->postresolve(dc->d_remote, dc->d_local, dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), ret, res, &variableAnswer);
+	(*t_pdl)->postresolve(dc->d_remote, dc->d_local, dc->d_mdp.d_qname, QType(dc->d_mdp.d_qtype), ret, &appliedPolicy, &policyTags, res, &variableAnswer);
 	
       }
     }
@@ -963,7 +960,7 @@ void startDoResolve(void *p)
           }
 
           // Does the query or validation mode sending out a SERVFAIL on validation errors?
-          if(!pw.getHeader()->cd && (g_dnssecmode == DNSSECMode::ValidateAll || (dc->d_mdp.d_header.ad && g_dnssecmode != DNSSECMode::Off))) {
+          if(!pw.getHeader()->cd && (g_dnssecmode == DNSSECMode::ValidateAll || dc->d_mdp.d_header.ad)) {
             if(sr.doLog()) {
               L<<Logger::Warning<<"Sending out SERVFAIL for "<<dc->d_mdp.d_qname<<" because recursor or query demands it for Bogus results"<<endl;
             }
@@ -977,8 +974,6 @@ void startDoResolve(void *p)
           }
         }
       }
-
-
 
       if(ret.size()) {
         orderAndShuffle(ret);
@@ -1041,6 +1036,11 @@ void startDoResolve(void *p)
       protobufResponse.set_rcode(pw.getHeader()->rcode);
       if (!appliedPolicy.empty()) {
         protobufResponse.set_appliedpolicy(appliedPolicy);
+      }
+      if (!policyTags.empty()) {
+        for(const auto tag : policyTags) {
+          protobufResponse.add_tags(tag);
+        }
       }
       protobufLogResponse(luaconfsLocal->protobufServer, dc, packet.size(), protobufResponse);
     }
@@ -2519,12 +2519,14 @@ int serviceMain(int argc, char*argv[])
   setupDelegationOnly();
   g_outgoingEDNSBufsize=::arg().asNum("edns-outgoing-bufsize");
 
-  if(::arg()["dnssec"]=="off") 
+  if(::arg()["dnssec"]=="off")
     g_dnssecmode=DNSSECMode::Off;
-  else if(::arg()["dnssec"]=="process") 
+  else if(::arg()["dnssec"]=="process-no-validate")
+    g_dnssecmode=DNSSECMode::ProcessNoValidate;
+  else if(::arg()["dnssec"]=="process")
     g_dnssecmode=DNSSECMode::Process;
   else if(::arg()["dnssec"]=="validate")
-    g_dnssecmode=DNSSECMode::ValidateAll; 
+    g_dnssecmode=DNSSECMode::ValidateAll;
   else if(::arg()["dnssec"]=="log-fail")
     g_dnssecmode=DNSSECMode::ValidateForLog;
   else {
@@ -2853,7 +2855,7 @@ int main(int argc, char **argv)
     ::arg().set("local-address","IP addresses to listen on, separated by spaces or commas. Also accepts ports.")="127.0.0.1";
     ::arg().setSwitch("non-local-bind", "Enable binding to non-local addresses by using FREEBIND / BINDANY socket options")="no";
     ::arg().set("trace","if we should output heaps of logging. set to 'fail' to only log failing domains")="off";
-    ::arg().set("dnssec", "DNSSEC mode: off/process (default)/log-fail/validate")="process";
+    ::arg().set("dnssec", "DNSSEC mode: off/process-no-validate (default)/process/log-fail/validate")="process-no-validate";
     ::arg().set("daemon","Operate as a daemon")="no";
     ::arg().setSwitch("write-pid","Write a PID file")="yes";
     ::arg().set("loglevel","Amount of logging. Higher is more. Do not set below 3")="4";

@@ -1,4 +1,4 @@
-@       86400   IN  SOA pdns-public-ns1.powerdns.com. pieter\.lexis.powerdns.com. 2016051201 10800 3600 604800 10800
+@       86400   IN  SOA pdns-public-ns1.powerdns.com. pieter\.lexis.powerdns.com. 2016052001 10800 3600 604800 10800
 @       3600    IN  NS  pdns-public-ns1.powerdns.com.
 @       3600    IN  NS  pdns-public-ns2.powerdns.com.
 ; Auth
@@ -14,10 +14,12 @@ auth-3.4.5.security-status                              60 IN TXT "3 Upgrade now
 auth-3.4.6.security-status                              60 IN TXT "3 Upgrade now, see https://doc.powerdns.com/md/security/powerdns-advisory-2015-03/"
 auth-3.4.7.security-status                              60 IN TXT "1 OK"
 auth-3.4.8.security-status                              60 IN TXT "1 OK"
+auth-3.4.9.security-status                              60 IN TXT "1 OK"
 
 auth-4.0.0-alpha1.security-status                       60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0-alpha2.security-status                       60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0-alpha3.security-status                       60 IN TXT "0 Unknown, prerelease"
+auth-4.0.0-beta1.security-status                        60 IN TXT "0 Unknown, prerelease"
 
 ; Auth Debian
 auth-3.4.1-2.debian.security-status                     60 IN TXT "3 Upgrade now, see https://doc.powerdns.com/md/security/powerdns-advisory-2015-01/ and https://doc.powerdns.com/md/security/powerdns-advisory-2015-02/"
@@ -40,6 +42,7 @@ auth-3.4.1-4_deb8u1.debian.security-status              60 IN TXT "3 Upgrade now
 auth-3.4.1-4_deb8u2.debian.security-status              60 IN TXT "3 Upgrade now, see https://doc.powerdns.com/md/security/powerdns-advisory-2015-02/"
 auth-3.4.1-4_deb8u3.debian.security-status              60 IN TXT "1 OK"
 auth-3.4.1-4_deb8u4.debian.security-status              60 IN TXT "1 OK"
+auth-3.4.1-4_deb8u5.debian.security-status              60 IN TXT "1 OK"
 
 auth-3.4.4-2_bpo8_1.debian.security-status              60 IN TXT "3 Upgrade now, see https://doc.powerdns.com/md/security/powerdns-advisory-2015-01/ and https://doc.powerdns.com/md/security/powerdns-advisory-2015-02/ and https://doc.powerdns.com/md/security/powerdns-advisory-2015-03/"
 auth-3.4.5-1_bpo8_1.debian.security-status              60 IN TXT "3 Upgrade now, see https://doc.powerdns.com/md/security/powerdns-advisory-2015-02/ and https://doc.powerdns.com/md/security/powerdns-advisory-2015-03/"
@@ -52,6 +55,7 @@ auth-4.0.0_alpha2-1.debian.security-status              60 IN TXT "0 Unknown, pr
 auth-4.0.0_alpha2-2.debian.security-status              60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0_alpha2-3.debian.security-status              60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0_alpha2-4.debian.security-status              60 IN TXT "0 Unknown, prerelease"
+auth-4.0.0_alpha3-1.debian.security-status              60 IN TXT "0 Unknown, prerelease"
 
 ; Auth Ubuntu
 auth-3.4.1-3.ubuntu.security-status                     60 IN TXT "3 Upgrade now, see https://doc.powerdns.com/md/security/powerdns-advisory-2015-01/ and https://doc.powerdns.com/md/security/powerdns-advisory-2015-02/"
@@ -91,6 +95,7 @@ recursor-3.7.3.security-status                          60 IN TXT "1 OK"
 recursor-4.0.0-alpha1.security-status                   60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0-alpha2.security-status                   60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0-alpha3.security-status                   60 IN TXT "0 Unknown, prerelease"
+recursor-4.0.0-beta1.security-status                    60 IN TXT "0 Unknown, prerelease"
 
 ; Recursor Debian
 recursor-3.6.2-2.debian.security-status                 60 IN TXT "3 Upgrade now, see https://doc.powerdns.com/md/security/powerdns-advisory-2015-01/"
@@ -110,6 +115,7 @@ recursor-4.0.0_alpha1-1.debian.security-status          60 IN TXT "0 Unknown, pr
 recursor-4.0.0_alpha1-3.debian.security-status          60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0_alpha2-1.debian.security-status          60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0_alpha2-2.debian.security-status          60 IN TXT "0 Unknown, prerelease"
+recursor-4.0.0_alpha3-1.debian.security-status          60 IN TXT "0 Unknown, prerelease"
 
 ; Recursor Raspbian
 recursor-3.6.2-2.raspbian.security-status               60 IN TXT "3 Upgrade now, see https://doc.powerdns.com/md/security/powerdns-advisory-2015-01/"
@@ -139,16 +145,18 @@ recursor-3.6.2-1.el7.fedora.security-status             60 IN TXT "3 Upgrade now
 auth-4.0.0_alpha1-1pdns.jessie.debian.security-status   60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0_alpha2-1pdns.jessie.debian.security-status   60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0_alpha3-1pdns.jessie.debian.security-status   60 IN TXT "0 Unknown, prerelease"
+auth-4.0.0_beta1-1pdns.jessie.debian.security-status    60 IN TXT "0 Unknown, prerelease"
 
 ; Ubuntu
 auth-4.0.0_alpha2-1pdns.wily.ubuntu.security-status     60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0_alpha2-1pdns.trusty.ubuntu.security-status   60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0_alpha3-1pdns.trusty.ubuntu.security-status   60 IN TXT "0 Unknown, prerelease"
+auth-4.0.0_beta1-1pdns.trusty.ubuntu.security-status   60 IN TXT "0 Unknown, prerelease"
 
 ; Raspbian
 auth-4.0.0_alpha2-1pdns.jessie.raspbian.security-status 60 IN TXT "0 Unknown, prerelease"
 auth-4.0.0_alpha3-1pdns.jessie.raspbian.security-status 60 IN TXT "0 Unknown, prerelease"
-
+auth-4.0.0_beta1-1pdns.jessie.raspbian.security-status 60 IN TXT "0 Unknown, prerelease"
 
 ;; Builder Generated packages (recursor)
 
@@ -156,16 +164,21 @@ auth-4.0.0_alpha3-1pdns.jessie.raspbian.security-status 60 IN TXT "0 Unknown, pr
 recursor-4.0.0_alpha1-1pdns.jessie.debian.security-status 60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0_alpha2-1pdns.jessie.debian.security-status 60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0_alpha3-1pdns.jessie.debian.security-status 60 IN TXT "0 Unknown, prerelease"
+recursor-4.0.0_beta1-1pdns.jessie.debian.security-status 60 IN TXT "0 Unknown, prerelease"
 
 ; Ubuntu
 recursor-4.0.0_alpha2-1pdns.trusty.ubuntu.security-status 60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0_alpha3-1pdns.trusty.ubuntu.security-status 60 IN TXT "0 Unknown, prerelease"
+recursor-4.0.0_beta1-1pdns.trusty.ubuntu.security-status 60 IN TXT "0 Unknown, prerelease"
 
 recursor-4.0.0_alpha2-1pdns.wily.ubuntu.security-status   60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0_alpha3-1pdns.wily.ubuntu.security-status   60 IN TXT "0 Unknown, prerelease"
+recursor-4.0.0_beta1-1pdns.wily.ubuntu.security-status   60 IN TXT "0 Unknown, prerelease"
 
 recursor-4.0.0_alpha3-1pdns.xenial.ubuntu.security-status 60 IN TXT "0 Unknown, prerelease"
+recursor-4.0.0_beta1-1pdns.xenial.ubuntu.security-status 60 IN TXT "0 Unknown, prerelease"
 
 ; Raspbian
 recursor-4.0.0_alpha2-1pdns.jessie.raspbian.security-status 60 IN TXT "0 Unknown, prerelease"
 recursor-4.0.0_alpha3-1pdns.jessie.raspbian.security-status 60 IN TXT "0 Unknown, prerelease"
+recursor-4.0.0_beta1-1pdns.jessie.raspbian.security-status 60 IN TXT "0 Unknown, prerelease"

@@ -12,6 +12,7 @@
 #include "ext/incbin/incbin.h"
 #include "htmlfiles.h"
 #include "base64.hh"
+#include "gettime.hh"
 
 
 static bool compareAuthorization(YaHTTP::Request& req, const string &expected_password, const string& expectedApiKey)
@@ -176,7 +177,7 @@ static void connectionThread(int sock, ComboAddress remote, string password, str
         Json::object obj;
         auto slow = g_dynblockNMG.getCopy();
         struct timespec now;
-        clock_gettime(CLOCK_MONOTONIC, &now);
+        gettime(&now);
         for(const auto& e: slow) {
           if(now < e->second.until ) {
             Json::object thing{{"reason", e->second.reason}, {"seconds", (double)(e->second.until.tv_sec - now.tv_sec)},
@@ -400,13 +401,18 @@ static void connectionThread(int sock, ComboAddress remote, string password, str
     fclose(fp);
     fp=0;
   }
+  catch(const YaHTTP::ParseError& e) {
+    vinfolog("Webserver thread died with parse error exception while processing a request from %s: %s", remote.toStringWithPort(), e.what());
+    if(fp)
+      fclose(fp);
+  }
   catch(const std::exception& e) {
-    errlog("Webserver thread died with exception: %s", e.what());
+    errlog("Webserver thread died with exception while processing a request from %s: %s", remote.toStringWithPort(), e.what());
     if(fp)
       fclose(fp);
   }
   catch(...) {
-    errlog("Webserver thread died with exception");
+    errlog("Webserver thread died with exception while processing a request from %s", remote.toStringWithPort());
     if(fp)
       fclose(fp);
   }
