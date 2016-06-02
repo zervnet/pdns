@@ -589,7 +589,7 @@ static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpRespons
  * Case 1: zone_name not found
  *      The server returns 404 Not Found
  * Case 2: the backend returns true on removal. This means the key is gone.
- *      The server returns 204 No Content
+ *      The server returns 200 No Content
  * Case 3: the backend returns false on removal. An error occoured.
  *      The sever returns 422 Unknown Status with message "Could not DELETE :cryptokey_id"
  * */
