@@ -567,7 +567,7 @@ static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
       ids.push_back(value.second.id);
     }
 
-
+    int insertedId;
     if (content.is_null()) {
       int bits = intFromJson(document, "bits", 0);
 
@@ -582,7 +582,7 @@ static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
         algorithm = providedAlgo.int_value();
       }
 
-      if (!dk.addKey(zonename, keyOrZone, algorithm, bits, active))
+      if ((insertedId = dk.addKey(zonename, keyOrZone, algorithm, bits, active)) < 0)
         throw ApiException("Adding key failed, perhaps DNSSEC not enabled in configuration?");
     } else {
       auto keyData = stringFromJson(document, "content");
@@ -599,10 +599,11 @@ static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
         dpk.d_flags = 256;
 
       dpk.setKey(dke);
-      if (!dk.addKey(zonename, dpk, active))
+      if ((insertedId = dk.addKey(zonename, dpk, active)) < 0)
         throw ApiException("Adding key failed, perhaps DNSSEC not enabled in configuration?");
     }
     resp->status = 201;
+    /*
     keyset=dk.getKeys(zonename, false);
     for (const auto& value : keyset) {
       if (std::find(ids.begin(), ids.end(), value.second.id) == ids.end()) {
@@ -613,8 +614,12 @@ static void apiZoneCryptokeys(HttpRequest* req, HttpResponse* resp) {
     }
     if (!inquireSingleKey)
       return;
-    // TODO Better to get the id of the key directly from addKey
-    // Return value of POST is equivalent to GET for a specific key, so continue
+      // TODO Better to get the id of the key directly from addKey
+      // Return value of POST is equivalent to GET for a specific key, so continue
+     */
+
+    inquireSingleKey = true;
+    inquireKeyId = (unsigned) insertedId;
   }
 
   DNSSECKeeper::keyset_t keyset=dk.getKeys(zonename, false);
