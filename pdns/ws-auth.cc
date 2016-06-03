@@ -567,7 +567,7 @@ static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpRespons
     }
 
     if (inquireSingleKey) {
-      key["content"] = value.first.getKey()->convertToISC();
+      key["privatekey"] = value.first.getKey()->convertToISC();
       resp->setBody(key);
       return;
     }
