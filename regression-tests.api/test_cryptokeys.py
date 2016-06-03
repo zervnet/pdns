@@ -1,4 +1,5 @@
 import subprocess
+import json
 
 from test_helper import ApiTestCase
 
@@ -34,12 +35,12 @@ class Cryptokeys(ApiTestCase):
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid))
         self.assertTrue(r.status_code == 200 or r.status_code == 422)
 
-        #Check that the key is actually deleted
+        # Check that the key is actually deleted
         try:
             out = subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "list-keys", self.zone])
             self.assertFalse(self.zone in out)
         except subprocess.CalledProcessError as e:
-            self.fail("pdnsutil list-keys failed: "+e.output)
+            self.fail("pdnsutil list-keys failed: " + e.output)
 
         #checks for not covered zonename
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"fail/cryptokeys/"+keyid))
@@ -48,4 +49,32 @@ class Cryptokeys(ApiTestCase):
         #checks for key is gone. Its ok even if no key had to be deleted. Or something went wrong with the backend.
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid))
         self.assertTrue(r.status_code == 200 or r.status_code == 422)
+
+    def test_post(self):
+        payload = {
+            'keytype': 'ksk',
+            'active' : True
+        }
+        r = self.session.post(
+            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys"),
+            data=json.dumps(payload),
+            headers={'content-type': 'application/json'})
+        self.assert_success_json(r)
+        self.assertEquals(r.status_code, 201)
+        response = r.json()
+        # Only a ksk added, so expected type is csk
+        self.assertEquals(response['keytype'], 'csk')
+        key_id = response['id']
+        # Check if the key is actually added
+        try:
+            out = subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "list-keys", self.zone])
+            self.assertTrue(self.zone in out)
+        except subprocess.CalledProcessError as e:
+            self.fail("pdnsutil list-keys failed: " + e.output)
+
+        # Remove it for further testing
+        try:
+            subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "remove-zone-key", self.zone, str(key_id)])
+        except subprocess.CalledProcessError as e:
+            self.fail("pdnsutil remove-zone-key failed: "+e.output)
 
