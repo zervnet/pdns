@@ -667,6 +667,44 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
   apiZoneCryptokeysGET(zonename, insertedId, resp);
  }
 
+/*
+ * This method handles PUT (execute) requests for URL /api/v1/servers/:server_id/zones/:zone_name/cryptokeys/:cryptokey_id .
+ * It de/activates a key from :zone_name specified by :cryptokey_id.
+ * Server Answers:
+ * Case 1: zone_name not found
+ *      The server returns 404 Not Found
+ * Case 2: invalid JSON data
+ *      The server returns 400 Bad Request
+ * Case 3: the backend returns true on de/activation. This means the key is de/active.
+ *      The server returns 200 OK
+ * Case 4: the backend returns false on de/activation. An error occoured.
+ *      The sever returns 422 Unknown Status with message "Could not de/activate Key: :cryptokey_id in Zone: :zone_name"
+ * */
+static void apiZoneCryptokeysPUT(DNSName zonename, int inquireKeyId, HttpRequest *req, HttpResponse *resp){
+
+  //throws an exception if the Body is empty
+  auto document = req->json();
+  //throws an exception if the key does not exist or is not a bool
+  bool active = boolFromJson(document, "active");
+
+  UeberBackend B;
+  DNSSECKeeper dk(&B);
+  DomainInfo di;
+
+  if (!B.getDomainInfo(zonename, di))
+    throw HttpNotFoundException();
+
+  if (active){
+    if (!dk.activateKey(zonename, inquireKeyId)) {
+      resp->setErrorResult("Could not activate Key: " + req->parameters["key_id"] + " in Zone: " + zonename.toString(), 422);
+    }
+  } else {
+    if (!dk.deactivateKey(zonename, inquireKeyId)) {
+      resp->setErrorResult("Could not deactivate Key: " + req->parameters["key_id"] + " in Zone: " + zonename.toString(), 422);
+    }
+  }
+  resp->setSuccessResult("OK", 200);
+}
 
 /*
  * This method choose the right functionality for the request. It also checks for a cryptokey_id which has to be passed
@@ -674,16 +712,20 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
  * */
 static void apiZoneCryptokeys(HttpRequest *req, HttpResponse *resp) {
   DNSName zonename = apiZoneIdToName(req->parameters["id"]);
+
+  int inquireKeyId = -1;
+  if (req->parameters.count("key_id")) {
+    inquireKeyId = std::stoi(req->parameters["key_id"]);
+  }
+
   if (req->method == "GET") {
-    int inquireKeyId = -1;
-    if (req->parameters.count("key_id")) {
-      inquireKeyId = std::stoi(req->parameters["key_id"]);
-    }
     apiZoneCryptokeysGET(zonename,inquireKeyId, resp);
   } else if (req->method == "DELETE") {
     apiZoneCryptokeysDELETE(zonename, req, resp);
   } else if (req->method == "POST") {
     apiZoneCryptokeysPOST(zonename, req, resp);
+  }else if (inquireKeyId && (req->method == "PUT")){
+    apiZoneCryptokeysPUT(zonename, inquireKeyId, req, resp);
   } else {
     throw HttpException(501); //Returns not implemented
   }
