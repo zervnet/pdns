@@ -44,7 +44,7 @@ class Cryptokeys(ApiTestCase):
 
         #checks for not covered zonename
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"fail/cryptokeys/"+keyid))
-        self.assertEquals(r.status_code, 404)
+        self.assertEquals(r.status_code, 400)
 
         #checks for key is gone. Its ok even if no key had to be deleted. Or something went wrong with the backend.
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid))

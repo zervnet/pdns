@@ -709,7 +709,18 @@ Returns all public data about cryptokeys, including `privatekey`.
 
 #### DELETE
 
-**TODO**: Not yet implemented.
+This Method deletes a key from a zone.
+
+#### Parameters:
+
+* `:zone_name`: name of the zone which is signed with a key with cryptokey_id
+* `cryptokey\_id`: id of the key which wanted to be gone
+
+#### Responses:
+
+* `200 No Content`: The Key is gone.
+* `400 Bad Request`: The `zone_name` is not found.
+* `422 Unknown Status with message "Could not DELETE :cryptokey_id"`: The backend failed to remove the key.
 
 Cache Access
 ============

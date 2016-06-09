@@ -587,7 +587,7 @@ static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpRespons
  * It deletes a key from :zone_name specified by :cryptokey_id.
  * Server Answers:
  * Case 1: zone_name not found
- *      The server returns 404 Not Found
+ *      The server returns 400 Bad Request
  * Case 2: the backend returns true on removal. This means the key is gone.
  *      The server returns 200 No Content
  * Case 3: the backend returns false on removal. An error occoured.
@@ -602,7 +602,7 @@ static void apiZoneCryptokeysDELETE(DNSName zonename, HttpRequest *req, HttpResp
   DNSSECKeeper dk(&B);
   DomainInfo di;
   if (!B.getDomainInfo(zonename, di))
-    throw HttpNotFoundException();
+    throw HttpBadRequestException();
   if (dk.removeKey(zonename, inquireKeyId)) {
     resp->setSuccessResult("OK", 200);
   } else {
