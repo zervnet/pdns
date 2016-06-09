@@ -593,11 +593,9 @@ static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpRespons
  * Case 3: the backend returns false on removal. An error occoured.
  *      The sever returns 422 Unknown Status with message "Could not DELETE :cryptokey_id"
  * */
-static void apiZoneCryptokeysDELETE(DNSName zonename, HttpRequest *req, HttpResponse *resp) {
+static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequest *req, HttpResponse *resp) {
   if (!req->parameters.count("key_id"))
     throw HttpBadRequestException();
-  unsigned int inquireKeyId = 0;
-  inquireKeyId = std::stoi(req->parameters["key_id"]);
   UeberBackend B;
   DNSSECKeeper dk(&B);
   DomainInfo di;
@@ -721,7 +719,7 @@ static void apiZoneCryptokeys(HttpRequest *req, HttpResponse *resp) {
   if (req->method == "GET") {
     apiZoneCryptokeysGET(zonename,inquireKeyId, resp);
   } else if (req->method == "DELETE") {
-    apiZoneCryptokeysDELETE(zonename, req, resp);
+    apiZoneCryptokeysDELETE(zonename, inquireKeyId, req, resp);
   } else if (req->method == "POST") {
     apiZoneCryptokeysPOST(zonename, req, resp);
   }else if (inquireKeyId && (req->method == "PUT")){
