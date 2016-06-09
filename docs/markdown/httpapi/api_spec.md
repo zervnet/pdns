@@ -705,18 +705,29 @@ Returns all public data about cryptokeys, including `privatekey`.
 
 #### PUT
 
-**TODO**: Not yet implemented.
+This method handles PUT (execute) de/activates a key from `zone_name` specified by `cryptokey_id`.
+
+##### Parameters:
+
+* `:zone_name`: name of the zone for which the key with `cryptokey_id` should be de/activated
+* `cryptokey_id`: id of the key which wanted to be de/activated
+
+##### Responses:
+* `200 OK`: The key with `cryptokey_id` is de/activated.
+* `400 Bad Request`: The `zone_name` is not found.
+* `422 Unprocessable Entity with message "Could not de/activate Key: :cryptokey_id in Zone: :zone_name`:
+    &nbsp;&nbsp;The backend returns false on de/activation. An error occoured.
 
 #### DELETE
 
 This Method deletes a key from a zone.
 
-#### Parameters:
+##### Parameters:
 
-* `:zone_name`: name of the zone which is signed with a key with cryptokey_id
-* `cryptokey\_id`: id of the key which wanted to be gone
+* `:zone_name`: name of the zone which is signed with a key with `cryptokey_id`
+* `cryptokey_id`: id of the key which wanted to be gone
 
-#### Responses:
+##### Responses:
 
 * `200 No Content`: The Key is gone.
 * `400 Bad Request`: The `zone_name` is not found.
