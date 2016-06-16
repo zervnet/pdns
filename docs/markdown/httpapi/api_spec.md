@@ -642,7 +642,7 @@ CryptoKeys
 cryptokey\_resource
 -------------------
 
-    {[
+    {
       "type": "CryptoKey",
       "id": <int>,
       "active": <bool>,
@@ -652,7 +652,7 @@ cryptokey\_resource
       "ds": [ <ds>,
               <ds>,
               .... ]
-    ]}
+    }
 
 
 ##### Parameters:
