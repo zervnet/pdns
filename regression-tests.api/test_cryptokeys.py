@@ -1,5 +1,6 @@
 import subprocess
 import json
+import sys
 
 from test_helper import ApiTestCase
 
@@ -50,15 +51,39 @@ class Cryptokeys(ApiTestCase):
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid))
         self.assertTrue(r.status_code == 200 or r.status_code == 422)
 
-    def test_post(self):
-        payload = {
-            'keytype': 'ksk',
-            'active' : True
-        }
+    # Prepares the json object for Post and sends it to the server
+    def add_key(self, content='', type='ksk', active='true' , algo='', bits=0):
+        if algo == '':
+            payload = {
+                'keytype': type,
+                'active' : active
+            }
+        else:
+            payload = {
+                'keytype': type,
+                'active' : active,
+                'algo' : algo
+            }
+        if bits > 0:
+            payload['bits'] = bits
+        if content != '':
+            payload['content'] = content
         r = self.session.post(
             self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys"),
             data=json.dumps(payload),
             headers={'content-type': 'application/json'})
+        return r
+
+    # Removes a key by id using the pdnsutil command
+    def remove_key(self, key_id):
+        try:
+            subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "remove-zone-key", self.zone, str(key_id)])
+        except subprocess.CalledProcessError as e:
+            self.fail("pdnsutil remove-zone-key failed: "+e.output)
+
+    # Tests POST for a positiv result and deletes the added key
+    def post_helper(self,content='', algo='', bits=0):
+        r = self.add_key(content=content, algo=algo, bits=bits)
         self.assert_success_json(r)
         self.assertEquals(r.status_code, 201)
         response = r.json()
@@ -73,11 +98,68 @@ class Cryptokeys(ApiTestCase):
             self.fail("pdnsutil list-keys failed: " + e.output)
 
         # Remove it for further testing
-        try:
-            subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "remove-zone-key", self.zone, str(key_id)])
-        except subprocess.CalledProcessError as e:
-            self.fail("pdnsutil remove-zone-key failed: "+e.output)
+        self.remove_key(key_id)
 
+    def test_post(self):
+        # Test add a key with default algorithm
+        self.post_helper()
+
+        # Test add a key with specific number
+        self.post_helper(algo=10, bits=512)
+
+        # Test add a key with specific name and bits
+        self.post_helper(algo="rsasha256", bits=256)
+
+        # Test add a key with specific name
+        self.post_helper(algo='ecdsa256')
+
+        # Test add a private key from extern resource
+        self.post_helper(content="Private-key-format: v1.2\n"+
+                            "Algorithm: 8 (RSASHA256)\n"+
+                            "Modulus: 4GlYLGgDI7ohnP8SmEW8EBERbNRusDcg0VQda/EPVHU=\n"+
+                            "PublicExponent: AQAB\n"+
+                            "PrivateExponent: JBnuXF5zOtkjtSz3odV+Fk5UNUTTeCsiI16dkcM7TVU=\n"+
+                            "Prime1: /w7TM4118RoSEvP8+dgnCw==\n"+
+                            "Prime2: 4T2KhkYLa3w7rdK3Cb2ifw==\n"+
+                            "Exponent1: 3aeKj9Ct4JuhfWsgPBhGxQ==\n"+
+                            "Exponent2: tfh1OMPQKBdnU6iATjNR2w==\n"+
+                            "Coefficient: eVrHe/kauqOewSKndIImrg==)\n")
+
+        # Test wrong key format
+        r = self.add_key(content="trollololoooolll")
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code, 422)
+        self.assertIn("Wrong key format!",r.json()['error'])
+
+        # Test wrong keytype
+        r = self.add_key(type='sdfdhhgj')
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code, 422)
+        self.assertIn("Invalid keytype",r.json()['error'])
+
+        #Test unsupported algorithem
+        r = self.add_key(algo='lkjhgf')
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code, 422)
+        self.assertIn("Unknown algorithm:",r.json()['error'])
+
+        #Test add a key and forgot bits
+        r = self.add_key(algo="rsasha256")
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code, 422)
+        self.assertIn("key requires the size (in bits) to be passed", r.json()['error'])
+
+        #Test wrong bit size
+        r = self.add_key(algo=10, bits=30)
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code,422)
+        self.assertIn("Wrong bit size!", r.json()['error'])
+
+        #Test can't guess key size
+        r = self.add_key(algo=15)
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code,422)
+        self.assertIn("Can't guess key size for algorithm", r.json()['error'])
 
     def test_deactivate_key(self):
 
