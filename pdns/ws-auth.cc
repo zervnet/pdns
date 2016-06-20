@@ -608,6 +608,38 @@ static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequ
   }
 }
 
+/*
+ * This method adds a key to a zone by generate it or content parameter.
+ * Parameter:
+ *  {
+ *  "content" : "key The format used is compatible with BIND and NSD/LDNS" <string>
+ *  "keytype" : "ksk|zsk" <string>
+ *  "active"  : "true|false" <value>
+ *  "algo" : "key generation algorithim "name|number" as default"<string> https://doc.powerdns.com/md/authoritative/dnssec/#supported-algorithms
+ *  "bits" : number of bits <int>
+ *  }
+ *
+ * Response:
+ *  Case 1: keytype isn't ksk|zsk
+ *    The server returns 422 Unprocessable Entity {"error" : "Invalid keytype 'keytype'"}
+ *  Case 2: The "algo" isn't supported
+ *    The server returns 422 Unprocessable Entity {"error" : "Unknown algorithm: 'algo'"}
+ *  Case 3: Algorithm <= 10 and no bits were passed
+ *    The server returns 422 Unprocessable Entity {"error" : "Creating an algorithm algo key requires the size (in bits) to be passed"}
+ *  Case 4: The wrong keysize was passed
+ *    The server returns 422 Unprocessable Entity {"error" : "Wrong bit size!"}
+ *  Case 5: If the server cant guess the keysize
+ *    The server returns 422 Unprocessable Entity {"error" : "Can't guess key size for algorithm"}
+ *  Case 6: The key-creation failed
+ *    The server returns 422 Unprocessable Entity {"error" : "Adding key failed, perhaps DNSSEC not enabled in configuration?"}
+ *  Case 7: The key in content has the wrong format
+ *    The server returns 422 Unprocessable Entity {"error" : "Wrong key format!"}
+ *  Case 7: No content and everything was fine
+ *    The server returns 201 OK and all public data about the new cryptokey
+ *  Case 8: With specified content
+ *    The server returns 201 OK and all public data about the added cryptokey
+ */
+
 static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpResponse *resp) {
   auto document = req->json();
   auto content = document["content"];
@@ -620,7 +652,7 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
   } else if (stringFromJson(document, "keytype") == "zsk") {
     keyOrZone = false;
   } else {
-    throw ApiException("Invalid keytype: " + stringFromJson(document, "keytype"));
+    throw ApiException("Invalid keytype " + stringFromJson(document, "keytype"));
   }
 
   UeberBackend B;
@@ -629,7 +661,6 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
   int insertedId;
   if (content.is_null()) {
     int bits = intFromJson(document, "bits", 0);
-
     int algorithm = 13; // ecdsa256
     auto providedAlgo = document["algo"];
     if (providedAlgo.is_string()) {
@@ -641,25 +672,41 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
       algorithm = providedAlgo.int_value();
     }
 
-    if ((insertedId = dk.addKey(zonename, keyOrZone, algorithm, bits, active)) < 0)
+    try{
+      insertedId = dk.addKey(zonename, keyOrZone, algorithm, bits, active);
+    }catch (std::runtime_error& error){
+      throw ApiException(error.what());
+    }
+
+    if (insertedId < 0)
       throw ApiException("Adding key failed, perhaps DNSSEC not enabled in configuration?");
   } else {
     auto keyData = stringFromJson(document, "content");
     DNSKEYRecordContent dkrc;
-    shared_ptr<DNSCryptoKeyEngine> dke(DNSCryptoKeyEngine::makeFromISCString(dkrc, keyData));
     DNSSECPrivateKey dpk;
-    dpk.d_algorithm = dkrc.d_algorithm;
-    if(dpk.d_algorithm == 7)
-      dpk.d_algorithm = 5;
+    try{
+      shared_ptr<DNSCryptoKeyEngine> dke(DNSCryptoKeyEngine::makeFromISCString(dkrc, keyData));
+      dpk.d_algorithm = dkrc.d_algorithm;
+      if(dpk.d_algorithm == 7)
+        dpk.d_algorithm = 5;
 
-    if (keyOrZone)
-      dpk.d_flags = 257;
-    else
-      dpk.d_flags = 256;
+      if (keyOrZone)
+        dpk.d_flags = 257;
+      else
+        dpk.d_flags = 256;
 
-    dpk.setKey(dke);
-    if ((insertedId = dk.addKey(zonename, dpk, active)) < 0)
+      dpk.setKey(dke);
+    } catch (std::runtime_error error){
+      throw ApiException("Wrong key format!");
+    }
+    try{
+      insertedId = dk.addKey(zonename, dpk, active);
+    }catch (std::runtime_error& error){
+      throw ApiException(error.what());
+    }
+    if (insertedId < 0)
       throw ApiException("Adding key failed, perhaps DNSSEC not enabled in configuration?");
+
   }
   resp->status = 201;
   apiZoneCryptokeysGET(zonename, insertedId, resp);
