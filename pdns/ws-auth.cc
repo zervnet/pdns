@@ -680,6 +680,10 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
  * */
 static void apiZoneCryptokeysPUT(DNSName zonename, int inquireKeyId, HttpRequest *req, HttpResponse *resp){
 
+  //check if there is a key_id specified
+  if (!req->parameters.count("key_id"))
+    throw HttpBadRequestException();
+
   //throws an exception if the Body is empty
   auto document = req->json();
   //throws an exception if the key does not exist or is not a bool
@@ -724,7 +728,7 @@ static void apiZoneCryptokeys(HttpRequest *req, HttpResponse *resp) {
     apiZoneCryptokeysDELETE(zonename, inquireKeyId, req, resp);
   } else if (req->method == "POST") {
     apiZoneCryptokeysPOST(zonename, req, resp);
-  }else if (inquireKeyId && (req->method == "PUT")){
+  }else if (req->method == "PUT"){
     apiZoneCryptokeysPUT(zonename, inquireKeyId, req, resp);
   } else {
     throw HttpException(501); //Returns not implemented
