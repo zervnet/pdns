@@ -758,8 +758,9 @@ static void apiZoneCryptokeysPUT(DNSName zonename, int inquireKeyId, HttpRequest
 }
 
 /*
- * This method choose the right functionality for the request. It also checks for a cryptokey_id which has to be passed
+ * This method chooses the right functionality for the request. It also checks for a cryptokey_id which has to be passed
  * by URL /api/v1/servers/:server_id/zones/:zone_name/cryptokeys/:cryptokey_id .
+ * If the the HTTP-request-method isn't supported, the function returns a response with the 405 code (method not allowed).
  * */
 static void apiZoneCryptokeys(HttpRequest *req, HttpResponse *resp) {
   DNSName zonename = apiZoneIdToName(req->parameters["id"]);
@@ -778,7 +779,7 @@ static void apiZoneCryptokeys(HttpRequest *req, HttpResponse *resp) {
   }else if (req->method == "PUT"){
     apiZoneCryptokeysPUT(zonename, inquireKeyId, req, resp);
   } else {
-    throw HttpException(501); //Returns not implemented
+    throw HttpMethodNotAllowedException(); //Returns method not allowed
   }
 }
 
