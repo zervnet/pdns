@@ -161,7 +161,7 @@ class Cryptokeys(ApiTestCase):
         self.assertEquals(r.status_code,422)
         self.assertIn("Can't guess key size for algorithm", r.json()['error'])
 
-    def test_deactivate_key(self):
+    def test_put_activate_deactivate_key(self):
 
         #create key
         try:
@@ -178,8 +178,6 @@ class Cryptokeys(ApiTestCase):
             data=json.dumps(payload),
             headers={'content-type': 'application/json'})
         self.assertEquals(o.status_code, 200)
-        #print o.status_code
-        #print o.json()
 
         # check if key is activated
         try:
@@ -198,8 +196,6 @@ class Cryptokeys(ApiTestCase):
             headers={'content-type': 'application/json'})
         self.assertEquals(q.status_code, 200)
         self.assert_success_json(q)
-        #print q.json()
-        #print q.status_code
 
         # check if key is deactivated
         try:
@@ -213,3 +209,60 @@ class Cryptokeys(ApiTestCase):
             subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "remove-zone-key", self.zone, str(keyid)])
         except subprocess.CalledProcessError as e:
             self.fail("pdnsutil remove-zone-key failed: "+e.output)
+
+    def test_put_deactivate_deactivated_activate_activated_key(self):
+
+        #create key
+        try:
+            keyid = subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "add-zone-key", self.zone, "ksk"])
+        except subprocess.CalledProcessError as e:
+            self.fail("pdnsutil add-zone-key failed: "+e.output)
+
+        # deactivate key
+        payload = {
+            'active': False
+        }
+        q = self.session.put(
+            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid),
+            data=json.dumps(payload),
+            headers={'content-type': 'application/json'})
+        self.assertEquals(q.status_code, 200)
+        self.assert_success_json(q)
+
+        # check if key is still deactivated
+        try:
+            out = subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "show-zone", self.zone])
+            self.assertTrue("Inactive" in out)
+        except subprocess.CalledProcessError as e:
+            self.fail("pdnsutil show-zone failed: " + e.output)
+
+        # activate key
+        payload2 = {
+            'active': True
+        }
+        o = self.session.put(
+            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid),
+            data=json.dumps(payload2),
+            headers={'content-type': 'application/json'})
+        self.assertEquals(o.status_code, 200)
+
+        # check if key is activated
+        try:
+            out = subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "show-zone", self.zone])
+            self.assertTrue("Active" in out)
+        except subprocess.CalledProcessError as e:
+            self.fail("pdnsutil show-zone failed: " + e.output)
+
+        #activate again
+        z = self.session.put(
+            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid),
+            data=json.dumps(payload2),
+            headers={'content-type': 'application/json'})
+        self.assertEquals(z.status_code, 200)
+
+        # check if key is still activated
+        try:
+            out = subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "show-zone", self.zone])
+            self.assertTrue("Active" in out)
+        except subprocess.CalledProcessError as e:
+            self.fail("pdnsutil show-zone failed: " + e.output)
