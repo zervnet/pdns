@@ -9,7 +9,7 @@ class Cryptokeys(ApiTestCase):
     def setUp(self):
         super(Cryptokeys, self).setUp()
         payload = {
-            'name': self.zone,
+            'name': Cryptokeys.zone,
             'kind': 'Native',
             'nameservers': ['ns1.example.com.', 'ns2.example.com.']
         }
@@ -23,14 +23,14 @@ class Cryptokeys(ApiTestCase):
     def tearDown(self):
         super(Cryptokeys,self).tearDown()
         # Removes zone
-        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/" + self.zone))
+        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/" + Cryptokeys.zone))
         self.assertEquals(r.status_code, 204)
         self.assertNotIn('Content-Type', r.headers)
 
-    # Retuns all public data from all keys from self.zone
+    # Retuns all public data from all keys from Cryptokeys.zone
     def get_keys(self):
         r = self.session.get(
-            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys"))
+            self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys"))
         self.assert_success_json(r)
         return r.json()
 
@@ -52,7 +52,7 @@ class Cryptokeys(ApiTestCase):
         if content != '':
             payload['content'] = content
         r = self.session.post(
-            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys"),
+            self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys"),
             data=json.dumps(payload),
             headers={'content-type': 'application/json'})
         if assertion:
@@ -70,7 +70,7 @@ class Cryptokeys(ApiTestCase):
         keyid = str(r.json()['id'])
 
         #checks the status code. I don't know how to test explicit that the backend fail removing a key.
-        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid))
+        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+keyid))
         self.assertTrue(r.status_code == 200 or r.status_code == 422)
 
         # Check that the key is actually deleted
@@ -78,17 +78,17 @@ class Cryptokeys(ApiTestCase):
         self.assertFalse(keyid in keys)
 
         #checks for not covered zonename
-        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"fail/cryptokeys/"+keyid))
+        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"fail/cryptokeys/"+keyid))
         self.assertEquals(r.status_code, 400)
 
         #checks for key is gone. Its ok even if no key had to be deleted. Or something went wrong with the backend.
-        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+keyid))
+        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+keyid))
         self.assertTrue(r.status_code == 200 or r.status_code == 422)
 
     # Removes a key by id using the pdnsutil command
     def remove_key(self, keyid):
         #checks for key is gone. Its ok even if no key had to be deleted. Or something went wrong with the backend.
-        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+str(keyid)))
+        r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+str(keyid)))
         self.assertTrue(r.status_code == 200)
 
     # Tests POST for a positiv result and deletes the added key
@@ -185,7 +185,7 @@ class Cryptokeys(ApiTestCase):
             'active': True
         }
         o = self.session.put(
-            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+str(keyid)),
+            self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+str(keyid)),
             data=json.dumps(payload),
             headers={'content-type': 'application/json'})
         self.assertEquals(o.status_code, 200)
@@ -198,7 +198,7 @@ class Cryptokeys(ApiTestCase):
             'active': False
         }
         q = self.session.put(
-            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+str(keyid)),
+            self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+str(keyid)),
             data=json.dumps(payload2),
             headers={'content-type': 'application/json'})
         self.assertEquals(q.status_code, 200)
@@ -220,7 +220,7 @@ class Cryptokeys(ApiTestCase):
             'active': False
         }
         q = self.session.put(
-            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+str(keyid)),
+            self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+str(keyid)),
             data=json.dumps(payload),
             headers={'content-type': 'application/json'})
         self.assertEquals(q.status_code, 200)
@@ -234,7 +234,7 @@ class Cryptokeys(ApiTestCase):
             'active': True
         }
         o = self.session.put(
-            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+str(keyid)),
+            self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+str(keyid)),
             data=json.dumps(payload2),
             headers={'content-type': 'application/json'})
         self.assertEquals(o.status_code, 200)
@@ -244,7 +244,7 @@ class Cryptokeys(ApiTestCase):
 
         #activate again
         z = self.session.put(
-            self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+str(keyid)),
+            self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+str(keyid)),
             data=json.dumps(payload2),
             headers={'content-type': 'application/json'})
         self.assertEquals(z.status_code, 200)
