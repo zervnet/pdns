@@ -229,7 +229,7 @@ void UDPNameserver::bindIPv6()
       setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one));      // if this fails, we report an error in tcpreceiver too
     }
 
-    if (setSocketTimestamps(s))
+    if (!setSocketTimestamps(s))
       L<<Logger::Warning<<"Unable to enable timestamp reporting for socket"<<endl;
 
 #ifdef SO_REUSEPORT
@@ -291,11 +291,9 @@ void UDPNameserver::send(DNSPacket *p)
 
   fillMSGHdr(&msgh, &iov, cbuf, 0, (char*)buffer.c_str(), buffer.length(), &p->d_remote);
 
+  msgh.msg_control=NULL;
   if(p->d_anyLocal) {
     addCMsgSrcAddr(&msgh, cbuf, p->d_anyLocal.get_ptr(), 0);
-  }
-  else {
-    msgh.msg_control=NULL;
   }
   DLOG(L<<Logger::Notice<<"Sending a packet to "<< p->getRemote() <<" ("<< buffer.length()<<" octets)"<<endl);
   if(buffer.length() > p->getMaxReplyLen()) {

@@ -7,9 +7,8 @@ import struct
 import sys
 import threading
 
-# you need to get the dnsmessage.proto file from the PDNS
-# repository, then run:
-# protoc -I=. --python_out=. dnsmessage.proto
+# run: protoc -I=../pdns/ --python_out=. ../pdns/dnsmessage.proto
+# to generate dnsmessage_pb2
 import dnsmessage_pb2
 
 class PDNSPBConnHandler(object):
@@ -75,11 +74,16 @@ class PDNSPBConnHandler(object):
             if response.HasField('appliedPolicy') and response.appliedPolicy:
                 policystr = ', Applied policy: ' + response.appliedPolicy
 
+            tagsstr = ''
+            if response.tags:
+                tagsstr = ', Tags: ' + ','.join(response.tags)
+
             rrscount = len(response.rrs)
 
-            print("- Response Code: %d, RRs: %d%s" % (response.rcode,
+            print("- Response Code: %d, RRs: %d%s%s" % (response.rcode,
                                                       rrscount,
-                                                      policystr))
+                                                      policystr,
+                                                      tagsstr))
 
             for rr in response.rrs:
                 rrclass = 1

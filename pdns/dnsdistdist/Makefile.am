@@ -40,7 +40,11 @@ EXTRA_DIST=dnslabeltext.rl \
 	   ext/incbin/UNLICENSE \
 	   incfiles \
 	   src_js \
-	   dnsdist.service.in
+	   dnsdist.service.in \
+	   lua_hpp.mk \
+	   bpf-filter.main.ebpf \
+	   bpf-filter.qname.ebpf \
+	   bpf-filter.ebpf.src
 
 bin_PROGRAMS = dnsdist
 
@@ -58,9 +62,11 @@ dnsdist-web.$(OBJEXT): htmlfiles.h
 
 dnsdist_SOURCES = \
 	base64.hh \
+	bpf-filter.cc bpf-filter.hh \
 	dns.cc dns.hh \
 	dnscrypt.cc dnscrypt.hh \
 	dnsdist.cc dnsdist.hh \
+	dnsdist-dynbpf.cc dnsdist-dynbpf.hh \
 	dnsdist-cache.cc dnsdist-cache.hh \
 	dnsdist-carbon.cc \
 	dnsdist-console.cc \
@@ -93,10 +99,12 @@ dnsdist_SOURCES = \
 	sholder.hh \
 	sodcrypto.cc sodcrypto.hh \
 	sstuff.hh \
+	statnode.cc statnode.hh \
 	ext/luawrapper/include/LuaContext.hpp \
 	ext/json11/json11.cpp \
 	ext/json11/json11.hpp \
-	ext/incbin/incbin.h
+	ext/incbin/incbin.h \
+	ext/libbpf/libbpf.h
 
 dnsdist_LDFLAGS = \
 	$(AM_LDFLAGS) \
@@ -116,6 +124,11 @@ if HAVE_RE2
 dnsdist_LDADD += $(RE2_LIBS)
 endif
 
+if !HAVE_LUA_HPP
+BUILT_SOURCES += lua.hpp
+nodist_dnsdist_SOURCES = lua.hpp
+CLEANFILES += lua.hpp
+endif
 
 if HAVE_PROTOBUF
 if HAVE_PROTOC
@@ -198,4 +211,8 @@ systemdsystemunitdir = $(SYSTEMD_DIR)
 
 systemdsystemunit_DATA = \
 	dnsdist.service
+endif
+
+if !HAVE_LUA_HPP
+include lua_hpp.mk
 endif

@@ -7,6 +7,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADERS([config.h])
 AC_PROG_CC
 AC_PROG_CXX
+AC_LANG([C++])
 
 LT_PREREQ([2.2.2])
 LT_INIT([disable-static])
@@ -16,12 +17,16 @@ DNSDIST_CHECK_RAGEL
 PDNS_CHECK_LIBEDIT
 PDNS_CHECK_CLOCK_GETTIME
 
+PDNS_CHECK_OS
+PDNS_CHECK_NETWORK_LIBS
+
 boost_required_version=1.35
 
 PDNS_WITH_PROTOBUF
 AS_IF([test "x$PROTOBUF_LIBS" != "x" -a x"$PROTOC" != "x"],
   # The protobuf code needs boost::uuid, which is available from 1.42 onward
-  [boost_required_version=1.42]
+  [AC_MSG_WARN([Bumping minimal Boost requirement to 1.42. To keep the requirement at 1.35, disable protobuf support])
+  boost_required_version=1.42]
 )
 
 BOOST_REQUIRE([$boost_required_version])
@@ -30,6 +35,7 @@ BOOST_FOREACH
 PDNS_ENABLE_UNIT_TESTS
 PDNS_CHECK_RE2
 DNSDIST_ENABLE_DNSCRYPT
+PDNS_WITH_EBPF
 
 AX_AVAILABLE_SYSTEMD
 AM_CONDITIONAL([HAVE_SYSTEMD], [ test x"$systemd" = "xy" ])
@@ -44,6 +50,7 @@ AS_IF([test "x$with_luajit" = "xno"], [
 AS_IF([test "x$LUAPC" = "x" -a "x$LUAJITPC" = "x"], [
   AC_MSG_ERROR([Neither Lua nor LuaJIT found, Lua support is not optional])
 ])
+PDNS_CHECK_LUA_HPP
 
 AX_CXX_COMPILE_STDCXX_11([ext], [mandatory])
 
@@ -62,8 +69,6 @@ AS_IF([test "x$enable_hardening" != "xno"], [
   AC_CC_D_FORTIFY_SOURCE
   AC_LD_RELRO
 ])
-
-PDNS_CHECK_OS
 
 PDNS_ENABLE_SANITIZERS
 
@@ -85,3 +90,53 @@ AC_CONFIG_FILES([Makefile
 	ext/yahttp/yahttp/Makefile])
 
 AC_OUTPUT
+
+AC_MSG_NOTICE([])
+AC_MSG_NOTICE([Configuration summary])
+AC_MSG_NOTICE([=====================])
+AC_MSG_NOTICE([])
+AS_IF([test "x$ac_configure_args" != "x"],
+  [summary_conf_opts=$ac_configure_args],
+  [summary_conf_opts="(no options)"]
+)
+AC_MSG_NOTICE([dnsdist configured with: $summary_conf_opts])
+AC_MSG_NOTICE([])
+AC_MSG_NOTICE([CC: $CC])
+AC_MSG_NOTICE([CXX: $CXX])
+AC_MSG_NOTICE([LD: $LD])
+AC_MSG_NOTICE([CFLAGS: $CFLAGS])
+AC_MSG_NOTICE([CPPFLAGS: $CPPFLAGS])
+AC_MSG_NOTICE([CXXFLAGS: $CXXFLAGS])
+AC_MSG_NOTICE([LDFLAGS: $LDFLAGS])
+AC_MSG_NOTICE([LIBS: $LIBS])
+AC_MSG_NOTICE([BOOST_CPPFLAGS: $BOOST_CPPFLAGS])
+AC_MSG_NOTICE([])
+AC_MSG_NOTICE([Features enabled])
+AC_MSG_NOTICE([----------------])
+AS_IF([test "x$LUAPC" != "x"],
+  [AC_MSG_NOTICE([Lua: $LUAPC])],
+  [AS_IF([test "x$LUAJITPC" != "x"],
+    [AC_MSG_NOTICE([LuaJit: $LUAJITPC])],
+    [AC_MSG_NOTICE([Lua/LuaJit: no])])
+])
+AS_IF([test "x$PROTOBUF_LIBS" != "x" -a x"$PROTOC" != "x"],
+  [AC_MSG_NOTICE([Protobuf: yes])],
+  [AC_MSG_NOTICE([Protobuf: no])]
+)
+AS_IF([test "x$systemd" != "xn"],
+  [AC_MSG_NOTICE([systemd: yes])],
+  [AC_MSG_NOTICE([systemd: no])]
+)
+AS_IF([test "x$LIBSODIUM_LIBS" != "x"],
+  [AC_MSG_NOTICE([libsodium: yes])],
+  [AC_MSG_NOTICE([libsodium: no])]
+)
+AS_IF([test "x$enable_dnscrypt" != "xno"],
+  [AC_MSG_NOTICE([DNSCrypt: yes])],
+  [AC_MSG_NOTICE([DNSCrypt: no])]
+)
+AS_IF([test "x$RE2_LIBS" != "x"],
+  [AC_MSG_NOTICE([re2: yes])],
+  [AC_MSG_NOTICE([re2: no])]
+)
+AC_MSG_NOTICE([])

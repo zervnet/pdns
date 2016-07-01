@@ -30,6 +30,8 @@ make
 
 To build on OS X, `./configure LIBEDIT_LIBS='-L/usr/lib -ledit' LIBEDIT_CFLAGS=-I/usr/include/editline`
 
+To build on OpenBSD, `./configure CXX=eg++ CPP=ecpp LIBEDIT_LIBS='-ledit -lcurses' LIBEDIT_CFLAGS=' '`
+
 On other recent platforms, installing a Lua and the system C++ compiler should be enough. 
 
 `dnsdist` can drop privileges using the `--uid` and `--gid` commandline-switches
@@ -332,6 +334,10 @@ Rules have selectors and actions. Current selectors are:
  * RE2Rule on query name (optional)
  * Packet requests DNSSEC processing
  * Query received over UDP or TCP
+ * Opcode (OpcodeRule)
+ * Number of entries in a given section (RecordsCountRule)
+ * Number of entries of a specific type in a given section (RecordsTypeCountRule)
+ * Presence of trailing data (TrailingDataRule)
 
 Special rules are:
 
@@ -383,13 +389,17 @@ A DNS rule can be:
  * a MaxQPSRule
  * a NetmaskGroupRule
  * a NotRule
+ * an OpcodeRule
  * an OrRule
  * a QClassRule
  * a QTypeRule
  * a RegexRule
  * a RE2Rule
+ * a RecordsCountRule
+ * a RecordsTypeCountRule
  * a SuffixMatchNodeRule
  * a TCPRule
+ * a TrailingDataRule
 
 Some specific actions do not stop the processing when they match, contrary to all other actions:
 
@@ -403,6 +413,20 @@ Some specific actions do not stop the processing when they match, contrary to al
 A convenience function `makeRule()` is supplied which will make a NetmaskGroupRule for you or a SuffixMatchNodeRule
 depending on how you call it. `makeRule("0.0.0.0/0")` will for example match all IPv4 traffic, `makeRule{"be","nl","lu"}` will
 match all Benelux DNS traffic.
+
+All the current rules can be removed at once with:
+
+```
+> clearRules()
+```
+
+It is also possible to replace the current rules by a list of new ones in a
+single operation with `setRules()`:
+
+```
+> setRules( { newRuleAction(TCPRule(), AllowAction()), newRuleAction(AllRule(), DropAction()) } )
+```
+
 
 More power
 ----------
@@ -568,11 +592,13 @@ This is still much in flux, but for now, try:
 For example:
 ```
 > grepq("127.0.0.1/24")
--11.9   127.0.0.1:52599                                 16127 nxdomain.powerdns.com.    A             RD    Question
--11.7   127.0.0.1:52599                                 16127 nxdomain.powerdns.com.    A     175.6    RD    Non-Existent domain
+Time    Client                                          Server       ID    Name                      Type  Lat.   TC RD AA Rcode
+-11.9   127.0.0.1:52599                                              16127 nxdomain.powerdns.com.    A               RD    Question
+-11.7   127.0.0.1:52599                                 127.0.0.1:53 16127 nxdomain.powerdns.com.    A     175.6     RD    Non-Existent domain
 > grepq("powerdns.com")
--38.7   127.0.0.1:52599                                 16127 nxdomain.powerdns.com.    A             RD    Question
--38.6   127.0.0.1:52599                                 16127 nxdomain.powerdns.com.    A     175.6    RD    Non-Existent domain
+Time    Client                                          Server       ID    Name                      Type  Lat.   TC RD AA Rcode
+-38.7   127.0.0.1:52599                                              16127 nxdomain.powerdns.com.    A               RD    Question
+-38.6   127.0.0.1:52599                                 127.0.0.1:53 16127 nxdomain.powerdns.com.    A     175.6     RD    Non-Existent domain
 ```
 
 Live histogram of latency
@@ -979,6 +1005,121 @@ If you forgot to write down the provider fingerprint value after generating the 
 Provider fingerprint is: E1D7:2108:9A59:BF8D:F101:16FA:ED5E:EA6A:9F6C:C78F:7F91:AF6B:027E:62F4:69C3:B1AA
 ```
 
+AXFR, IXFR and NOTIFY
+---------------------
+When `dnsdist` is deployed in front of a master authoritative server, it might
+receive AXFR or IXFR queries destined to this master. There are two issues
+that can arise in this kind of setup:
+
+ * If the master is part of a pool of servers, the first SOA query can be directed
+   by `dnsdist` to a different server than the following AXFR/IXFR one, which might
+   fail if the servers are not perfectly synchronised.
+ * If the master only allows AXFR/IXFR based on the source address of the requestor,
+   it might be confused by the fact that the source address will be the one from
+   the `dnsdist` server.
+
+The first issue can be solved by routing SOA, AXFR and IXFR requests explicitely
+to the master:
+
+```
+> newServer({address="192.168.1.2", name="master", pool={"master", "otherpool"}})
+> addAction(OrRule({QTypeRule(dnsdist.SOA), QTypeRule(dnsdist.AXFR), QTypeRule(dnsdist.IXFR)}), PoolAction("master"))
+```
+
+The second one might require allowing AXFR/IXFR from the `dnsdist` source address
+and moving the source address check on `dnsdist`'s side:
+
+```
+> addAction(AndRule({OrRule({QTypeRule(dnsdist.AXFR), QTypeRule(dnsdist.IXFR)}), NotRule(makeRule("192.168.1.0/24"))}), RCodeAction(dnsdist.REFUSED))
+```
+
+When `dnsdist` is deployed in front of slaves, however, an issue might arise with NOTIFY
+queries, because the slave will receive a notification coming from the `dnsdist` address,
+and not the master's one. One way to fix this issue is to allow NOTIFY from the `dnsdist`
+address on the slave side (for example with PowerDNS's `trusted-notification-proxy`) and
+move the address check on `dnsdist`'s side:
+
+```
+> addAction(AndRule({OpcodeRule(DNSOpcode.Notify), NotRule(makeRule("192.168.1.0/24"))}), RCodeAction(dnsdist.REFUSED))
+```
+
+eBPF Socket Filtering
+---------------------
+`dnsdist` can use eBPF socket filtering on recent Linux kernels (4.1+) built with eBPF
+support (`CONFIG_BPF`, `CONFIG_BPF_SYSCALL`, ideally `CONFIG_BPF_JIT`).
+This feature might require an increase of the memory limit associated to a socket, via
+the `sysctl` setting `net.core.optmem_max`. When attaching an eBPF program to a socket,
+the size of the program is checked against this limit, and the default value might not be
+enough. Large map sizes might also require an increase of `RLIMIT_MEMLOCK`.
+
+This feature allows `dnsdist` to ask the kernel to discard incoming packets in kernel-space
+instead of them being copied to userspace just to be dropped, thus being a lot of faster.
+
+The BPF filter can be used to block incoming queries manually:
+
+```
+> bpf = newBPFFilter(1024, 1024, 1024)
+> bpf:attachToAllBinds()
+> bpf:block(newCA("2001:DB8::42"))
+> bpf:blockQName(newDNSName("evildomain.com"), 255)
+> bpf:getStats()
+[2001:DB8::42]: 0
+evildomain.com. 255: 0
+> bpf:unblock(newCA("2001:DB8::42"))
+> bpf:unblockQName(newDNSName("evildomain.com"), 255)
+> bpf:getStats()
+>
+```
+
+The `blockQName()` method can be used to block queries based on the exact qname supplied,
+in a case-insensitive way, and an optional qtype. Using the 255 (ANY) qtype will block all
+queries for the qname, regardless of the qtype.
+Contrary to source address filtering, qname filtering only works over UDP. TCP qname
+filtering can be done the usual way:
+
+```
+> addAction(AndRule({TCPRule(true), makeRule("evildomain.com")}), DropAction())
+```
+
+The `attachToAllBinds()` method attaches the filter to every existing bind at runtime,
+but it's also possible to define a default BPF filter at configuration time, so
+it's automatically attached to every bind:
+
+```
+bpf = newBPFFilter(1024, 1024, 1024)
+setDefaultBPFFilter(bpf)
+```
+
+Finally, it's also possible to attach it to specific binds at runtime:
+
+```
+> bpf = newBPFFilter(1024, 1024, 1024)
+> showBinds()
+#   Address              Protocol  Queries
+0   [::]:53              UDP       0
+1   [::]:53              TCP       0
+> bd = getBind(0)
+> bd:attachFilter(bpf)
+```
+
+`dnsdist` also supports adding dynamic, expiring blocks to a BPF filter:
+
+```
+bpf = newBPFFilter(1024, 1024, 1024)
+setDefaultBPFFilter(bpf)
+dbpf = newDynBPFFilter(bpf)
+function maintenance()
+        addBPFFilterDynBlocks(exceedQRate(20, 10), dbpf, 60)
+        dbpf:purgeExpired()
+end
+```
+
+This will dynamically block all hosts that exceeded 20 queries/s as measured
+over the past 10 seconds, and the dynamic block will last for 60 seconds.
+
+This feature has been successfully tested on Arch Linux, Arch Linux ARM,
+Fedora Core 23 and Ubuntu Xenial.
+
 All functions and types
 -----------------------
 Within `dnsdist` several core object types exist:
@@ -1011,9 +1152,14 @@ Here are all functions:
     * `addACL(netmask)`: add to the ACL set who can use this server
     * `setACL({netmask, netmask})`: replace the ACL set with these netmasks. Use `setACL({})` to reset the list, meaning no one can use us
     * `showACL()`: show our ACL set
+ * ClientState related:
+    * function `showBinds()`: list every local bind
+    * function `getBind(n)`: return the corresponding `ClientState` object
+    * member `attachFilter(BPFFilter)`: attach a BPF Filter to this bind
+    * member `toString()`: print the address this bind listens to
  * Network related:
-    * `addLocal(netmask, [false], [false])`: add to addresses we listen on. Second optional parameter sets TCP/IP or not. Third optional parameter sets SO_REUSEPORT when available.
-    * `setLocal(netmask, [false], [false])`: reset list of addresses we listen on to this address. Second optional parameter sets TCP/IP or not. Third optional parameter sets SO_REUSEPORT when available.
+    * `addLocal(netmask, [true], [false])`: add to addresses we listen on. Second optional parameter sets TCP/IP or not. Third optional parameter sets SO_REUSEPORT when available.
+    * `setLocal(netmask, [true], [false])`: reset list of addresses we listen on to this address. Second optional parameter sets TCP/IP or not. Third optional parameter sets SO_REUSEPORT when available.
  * Blocking related:
     * `addDomainBlock(domain)`: block queries within this domain
  * Carbon/Graphite/Metronome statistics related:
@@ -1072,20 +1218,28 @@ instantiate a server with additional parameters
     * `NetmaskGroupRule()`: matches traffic from the specified network range
     * `NotRule()`: matches if the sub-rule does not match
     * `OrRule()`: matches if at least one of the sub-rules matches
+    * `OpcodeRule()`: matches queries with the specified opcode
     * `QClassRule(qclass)`: matches queries with the specified qclass (numeric)
     * `QTypeRule(qtype)`: matches queries with the specified qtype
     * `RegexRule(regex)`: matches the query name against the supplied regex
+    * `RecordsCountRule(section, minCount, maxCount)`: matches if there is at least `minCount` and at most `maxCount` records in the `section` section
+    * `RecordsTypeCountRule(section, type, minCount, maxCount)`: matches if there is at least `minCount` and at most `maxCount` records of type `type` in the `section` section
+    * `RE2Rule(regex)`: matches the query name against the supplied regex using the RE2 engine
     * `SuffixMatchNodeRule(smn, [quiet-bool])`: matches based on a group of domain suffixes for rapid testing of membership. Pass `true` as second parameter to prevent listing of all domains matched.
     * `TCPRule(tcp)`: matches question received over TCP if `tcp` is true, over UDP otherwise
+    * `TrailingDataRule()`: matches if the query has trailing data
  * Rule management related:
+    * `clearRules()`: remove all current rules
     * `getAction(num)`: returns the Action associate with rule 'num'.
-    * `showRules()`: show all defined rules (Pool, Block, QPS, addAnyTCRule)
     * `mvResponseRule(from, to)`: move response rule 'from' to a position where it is in front of 'to'. 'to' can be one larger than the largest rule,
      in which case the rule will be moved to the last position.
     * `mvRule(from, to)`: move rule 'from' to a position where it is in front of 'to'. 'to' can be one larger than the largest rule,
      in which case the rule will be moved to the last position.
+    * `newRuleAction(DNS Rule, DNS Action)`: return a pair of DNS Rule and DNS Action, to be used with `setRules()`
     * `rmResponseRule(n)`: remove response rule n
     * `rmRule(n)`: remove rule n
+    * `setRules(list)`: replace the current rules with the supplied list of pairs of DNS Rules and DNS Actions (see `newRuleAction()`)
+    * `showRules()`: show all defined rules (Pool, Block, QPS, addAnyTCRule)
     * `topResponseRule()`: move the last response rule to the first position
     * `topRule()`: move the last rule to the first position
  * Built-in Actions for Rules:
@@ -1105,7 +1259,7 @@ instantiate a server with additional parameters
     * `SpoofAction(ip[, ip])` or `SpoofAction({ip, ip, ..}): forge a response with the specified IPv4 (for an A query) or IPv6 (for an AAAA). If you specify multiple addresses, all that match the query type (A, AAAA or ANY) will get spoofed in
     * `SpoofCNAMEAction(cname)`: forge a response with the specified CNAME value
     * `TCAction()`: create answer to query with TC and RD bits set, to move to TCP/IP
-    * `TeeAction(remote)`: send copy of query to remote, keep stats on responses
+    * `TeeAction(remote[, addECS])`: send copy of query to remote, keep stats on responses. If `addECS` is set to `true`, EDNS Client Subnet information will be added to the query
  * Specialist rule generators
     * `addAnyTCRule()`: generate TC=1 answers to ANY queries received over UDP, moving them to TCP
     * `addDomainSpoof(domain, ip[, ip6])` or `addDomainSpoof(domain, {IP, IP, IP..})`: generate answers for A/AAAA/ANY queries using the ip parameters
@@ -1158,6 +1312,7 @@ instantiate a server with additional parameters
     * `clearDynBlocks()`: clear all dynamic blocks
     * `showDynBlocks()`: show dynamic blocks in force
     * `addDynBlocks(addresses, message[, seconds])`: block the set of addresses with message `msg`, for `seconds` seconds (10 by default)
+    * `addBPFFilterDynBlocks(addresses, DynBPFFilter[, seconds])`: block the set of addresses using the supplied BPF Filter, for `seconds` seconds (10 by default)
     * `exceedServFails(rate, seconds)`: get set of addresses that exceed `rate` servails/s over `seconds` seconds
     * `exceedNXDOMAINs(rate, seconds)`: get set of addresses that exceed `rate` NXDOMAIN/s over `seconds` seconds
     * `exceedRespByterate(rate, seconds)`: get set of addresses that exeeded `rate` bytes/s answers over `seconds` seconds
@@ -1192,6 +1347,7 @@ instantiate a server with additional parameters
         * member `dh`: DNSHeader
         * member `len`: the question length
         * member `localaddr`: ComboAddress of the local bind this question was received on
+        * member `opcode`: the question opcode
         * member `qname`: DNSName of this question
         * member `qclass`: QClass (as an unsigned integer) of this question
         * member `qtype`: QType (as an unsigned integer) of this question
@@ -1234,6 +1390,19 @@ instantiate a server with additional parameters
     * `generateDNSCryptCertificate("/path/to/providerPrivate.key", "/path/to/resolver.cert", "/path/to/resolver.key", serial, validFrom, validUntil):` generate a new resolver private key and related certificate, valid from the `validFrom` timestamp until the `validUntil` one, signed with the provider private key
     * `printDNSCryptProviderFingerprint("/path/to/providerPublic.key")`: display the fingerprint of the provided resolver public key
     * `showDNSCryptBinds():`: display the currently configured DNSCrypt binds
+ * BPFFilter related:
+    * function `newBPFFilter(maxV4, maxV6, maxQNames)`: return a new eBPF socket filter with a maximum of maxV4 IPv4, maxV6 IPv6 and maxQNames qname entries in the block tables
+    * function `setDefaultBPFFilter(BPFFilter)`: when used at configuration time, the corresponding BPFFilter will be attached to every bind
+    * member `attachToAllBinds()`: attach this filter to every bind already defined. This is the run-time equivalent of `setDefaultBPFFilter(bpf)`
+    * member `block(ComboAddress)`: block this address
+    * member `blockQName(DNSName [, qtype=255])`: block queries for this exact qname. An optional qtype can be used, default to 255
+    * member `getStats()`: print the block tables
+    * member `unblock(ComboAddress)`: unblock this address
+    * member `unblockQName(DNSName [, qtype=255])`: remove this qname from the block list
+ * DynBPFFilter related:
+    * function `newDynBPFFilter(BPFFilter)`: return a new DynBPFFilter object using this BPF Filter
+    * member `block(ComboAddress[, seconds]): add this address to the underlying BPF Filter for `seconds` seconds (default to 10 seconds)
+    * member `purgeExpired()`: remove expired entries
  * RemoteLogger related:
     * `newRemoteLogger(address:port [, timeout=2, maxQueuedEntries=100, reconnectWaitTime=1])`: create a Remote Logger object, to use with `RemoteLogAction()` and `RemoteLogResponseAction()`
 
@@ -1241,7 +1410,7 @@ All hooks
 ---------
 `dnsdist` can call Lua per packet if so configured, and will do so with the following hooks:
 
-  * `bool blockFilter(ComboAddress, DNSQuestion)`: if defined, called for every packet. If this
+  * `bool blockFilter(dq)`: if defined, called for every packet. If this
     returns true, the packet is dropped. If false is returned, `dnsdist` will check if the DNSHeader indicates
     the packet is now a query response. If so, `dnsdist` will answer the client directly with the modified packet.
   * `server policy(candidates, DNSQuestion)`: if configured with `setServerPolicyLua()`

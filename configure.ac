@@ -45,6 +45,7 @@ PDNS_WITH_LUAJIT
 AS_IF([test "x$with_luajit" = "xno"], [
   PDNS_WITH_LUA
 ])
+PDNS_CHECK_LUA_HPP
 
 AX_CXX_COMPILE_STDCXX_11
 
@@ -102,6 +103,10 @@ PDNS_CHECK_RAGEL
 PDNS_CHECK_CLOCK_GETTIME
 
 BOOST_REQUIRE([1.35])
+# Boost accumulators, as used by dnsbulktest and dnstcpbench, need 1.48+
+# to be compatible with C++11
+AM_CONDITIONAL([HAVE_BOOST_GE_148], [test "$boost_major_version" -ge 148])
+
 BOOST_PROGRAM_OPTIONS([mt])
 PDNS_ENABLE_UNIT_TESTS
 PDNS_ENABLE_REPRODUCIBLE
@@ -109,8 +114,7 @@ PDNS_ENABLE_REPRODUCIBLE
 PDNS_WITH_SQLITE3
 
 PDNS_CHECK_PANDOC
-PDNS_CHECK_MKDOCS
-PDNS_CHECK_LINKCHECKER
+PDNS_FROM_GIT
 
 dnl Checks for library functions.
 AC_CHECK_FUNCS_ONCE([strcasestr localtime_r recvmmsg])
@@ -328,12 +332,7 @@ AC_MSG_NOTICE([])
 AC_MSG_NOTICE([Configuration summary])
 AC_MSG_NOTICE([=====================])
 AC_MSG_NOTICE([])
-AC_MSG_NOTICE([Configured with:$pdns_configure_args])
-AC_MSG_NOTICE([])
-AC_MSG_NOTICE([Modules: $modules])
-AC_MSG_NOTICE([Dynamic Modules: $dynmodules])
-AC_MSG_NOTICE([])
-AC_MSG_NOTICE([With ZeroMQ connector for remotebackend: $enable_remotebackend_zeromq])
+AC_MSG_NOTICE([Configured with: $pdns_configure_args])
 AC_MSG_NOTICE([])
 AC_MSG_NOTICE([CC: $CC])
 AC_MSG_NOTICE([CXX: $CXX])
@@ -343,22 +342,35 @@ AC_MSG_NOTICE([CPPFLAGS: $CPPFLAGS])
 AC_MSG_NOTICE([CXXFLAGS: $CXXFLAGS])
 AC_MSG_NOTICE([LDFLAGS: $LDFLAGS])
 AC_MSG_NOTICE([LIBS: $LIBS])
-AC_MSG_NOTICE([])
 AC_MSG_NOTICE([BOOST_CPPFLAGS: $BOOST_CPPFLAGS])
 AC_MSG_NOTICE([])
+AC_MSG_NOTICE([Features enabled])
+AC_MSG_NOTICE([----------------])
+AC_MSG_NOTICE([Built-in modules: $modules])
+AC_MSG_NOTICE([Dynamic modules: $dynmodules])
+AC_MSG_NOTICE([])
 AS_IF([test "x$openssl_ecdsa" == "xyes"],
-  [AC_MSG_NOTICE([OpenSSL ecdsa support: yes])],
-  [AC_MSG_NOTICE([OpenSSL ecdsa support: no])]
+  [AC_MSG_NOTICE([OpenSSL ecdsa: yes])],
+  [AC_MSG_NOTICE([OpenSSL ecdsa: no])]
 )
 AS_IF([test "x$needsqlite3" != "x"],
-  [AC_MSG_NOTICE([SQLite3 support: yes])],
-  [AC_MSG_NOTICE([SQLite3 support: no])]
+  [AC_MSG_NOTICE([SQLite3: yes])],
+  [AC_MSG_NOTICE([SQLite3: no])]
 )
 AS_IF([test "x$LUAPC" != "x"],
-  [AC_MSG_NOTICE([Lua support: $LUAPC])],
-  [AC_MSG_NOTICE([Lua support: no])]
-)
+  [AC_MSG_NOTICE([Lua: $LUAPC])],
+  [AS_IF([test "x$LUAJITPC" != "x"],
+    [AC_MSG_NOTICE([LuaJit: $LUAJITPC])],
+    [AC_MSG_NOTICE([Lua/LuaJit: no])])
+])
 AS_IF([test "x$enable_experimental_gss_tsig" == "xyes"],
-  [AC_MSG_NOTICE([GSS-TSIG support: yes])]
+  [AC_MSG_NOTICE([GSS-TSIG: yes])]
+)
+AS_IF([test "x$systemd" != "xn"],
+  [AC_MSG_NOTICE([systemd: yes])],
+  [AC_MSG_NOTICE([systemd: no])]
+)
+AS_IF([test "x$enable_remotebackend_zeromq" != "xno"],
+  [AC_MSG_NOTICE([ZeroMQ connector for remotebackend: yes])]
 )
 AC_MSG_NOTICE([])

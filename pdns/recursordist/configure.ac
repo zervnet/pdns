@@ -38,6 +38,7 @@ AX_CXX_COMPILE_STDCXX_11([ext], [mandatory])
 AC_PROG_LIBTOOL
 
 PDNS_CHECK_OS
+PDNS_CHECK_NETWORK_LIBS
 
 # Boost Context was introduced in 1.51 (Aug 2012), but there was an immediate
 # API break in 1.52 (Nov 2012), so we only support that, and later.
@@ -53,7 +54,9 @@ AC_DEFUN([PDNS_SELECT_CONTEXT_IMPL], [
       LDFLAGS="$LDFLAGS $BOOST_THREAD_LDFLAGS"
     fi
     AC_MSG_NOTICE([checking whether the Boost context library actually links...])
-    BOOST_FIND_LIB([context], [$1], [boost/context/fcontext.hpp], [[]])
+    BOOST_FIND_HEADER([boost/context/fcontext.hpp], [ : ], [
+      BOOST_FIND_LIB([context], [$1], [boost/context/fcontext.hpp], [[]])
+    ])
     case $boost_cv_lib_context in
       (yes)
         AC_MSG_NOTICE([MTasker will use the Boost context library for context switching])
@@ -76,7 +79,8 @@ boost_required_version=1.35
 PDNS_WITH_PROTOBUF
 AS_IF([test "x$PROTOBUF_LIBS" != "x" -a x"$PROTOC" != "x"],
   # The protobuf code needs boost::uuid, which is available from 1.42 onward
-  [boost_required_version=1.42]
+  [AC_MSG_WARN([Bumping minimal Boost requirement to 1.42. To keep the requirement at 1.35, disable protobuf support])
+  boost_required_version=1.42]
 )
 
 BOOST_REQUIRE([$boost_required_version])
@@ -88,6 +92,7 @@ PDNS_WITH_LUAJIT
 AS_IF([test "x$with_luajit" = "xno"], [
   PDNS_WITH_LUA
 ])
+PDNS_CHECK_LUA_HPP
 
 PDNS_ENABLE_VERBOSE_LOGGING
 
@@ -172,19 +177,22 @@ AC_MSG_NOTICE([CPPFLAGS: $CPPFLAGS])
 AC_MSG_NOTICE([CXXFLAGS: $CXXFLAGS])
 AC_MSG_NOTICE([LDFLAGS: $LDFLAGS])
 AC_MSG_NOTICE([LIBS: $LIBS])
-AC_MSG_NOTICE([])
 AC_MSG_NOTICE([BOOST_CPPFLAGS: $BOOST_CPPFLAGS])
 AC_MSG_NOTICE([])
+AC_MSG_NOTICE([Features enabled])
+AC_MSG_NOTICE([----------------])
 AS_IF([test "x$LUAPC" != "x"],
-  [AC_MSG_NOTICE([Lua support: $LUAPC])],
-  [AC_MSG_NOTICE([Lua support: no])]
-)
+  [AC_MSG_NOTICE([Lua: $LUAPC])],
+  [AS_IF([test "x$LUAJITPC" != "x"],
+    [AC_MSG_NOTICE([LuaJit: $LUAJITPC])],
+    [AC_MSG_NOTICE([Lua/LuaJit: no])])
+])
 AS_IF([test "x$PROTOBUF_LIBS" != "x" -a x"$PROTOC" != "x"],
-  [AC_MSG_NOTICE([Protobuf support: yes])],
-  [AC_MSG_NOTICE([Protobuf support: no])]
+  [AC_MSG_NOTICE([Protobuf: yes])],
+  [AC_MSG_NOTICE([Protobuf: no])]
 )
-AS_IF([test "x$systemd" != "x"],
-  [AC_MSG_NOTICE([systemd support: yes])],
-  [AC_MSG_NOTICE([systemd support: no])]
+AS_IF([test "x$systemd" != "xn"],
+  [AC_MSG_NOTICE([systemd: yes])],
+  [AC_MSG_NOTICE([systemd: no])]
 )
 AC_MSG_NOTICE([])

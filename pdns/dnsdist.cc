@@ -27,7 +27,13 @@
 #include <netinet/tcp.h>
 #include <limits>
 #include "dolog.hh"
-#include <readline.h>
+
+#if defined (__OpenBSD__)
+#include <readline/readline.h>
+#else
+#include <editline/readline.h>
+#endif
+
 #include "dnsname.hh"
 #include "dnswriter.hh"
 #include "base64.hh"
@@ -77,6 +83,9 @@ vector<std::tuple<ComboAddress, bool, bool>> g_locals;
 #ifdef HAVE_DNSCRYPT
 std::vector<std::tuple<ComboAddress,DnsCryptContext,bool>> g_dnsCryptLocals;
 #endif
+#ifdef HAVE_EBPF
+shared_ptr<BPFFilter> g_defaultBPFFilter;
+#endif /* HAVE_EBPF */
 vector<ClientState *> g_frontends;
 GlobalStateHolder<pools_t> g_pools;
 
@@ -119,6 +128,7 @@ Rings g_rings;
 
 GlobalStateHolder<servers_t> g_dstates;
 GlobalStateHolder<NetmaskTree<DynBlock>> g_dynblockNMG;
+GlobalStateHolder<SuffixMatchTree<DynBlock>> g_dynblockSMT;
 int g_tcpRecvTimeout{2};
 int g_tcpSendTimeout{2};
 
@@ -624,6 +634,15 @@ void addServerToPool(pools_t& pools, const string& poolName, std::shared_ptr<Dow
     vinfolog("Adding server to default pool");
   }
   pool->servers.push_back(make_pair(++count, server));
+  /* we need to reorder based on the server 'order' */
+  std::stable_sort(pool->servers.begin(), pool->servers.end(), [](const std::pair<unsigned int,std::shared_ptr<DownstreamState> >& a, const std::pair<unsigned int,std::shared_ptr<DownstreamState> >& b) {
+      return a.second->order < b.second->order;
+    });
+  /* and now we need to renumber for Lua (custom policies) */
+  size_t idx = 1;
+  for (auto& server : pool->servers) {
+    server.first = idx++;
+  }
 }
 
 void removeServerFromPool(pools_t& pools, const string& poolName, std::shared_ptr<DownstreamState> server)
@@ -637,10 +656,21 @@ void removeServerFromPool(pools_t& pools, const string& poolName, std::shared_pt
     vinfolog("Removing server from default pool");
   }
 
-  for (NumberedVector<shared_ptr<DownstreamState> >::iterator it = pool->servers.begin(); it != pool->servers.end(); it++) {
-    if (it->second == server) {
-      pool->servers.erase(it);
-      break;
+  size_t idx = 1;
+  bool found = false;
+  for (NumberedVector<shared_ptr<DownstreamState> >::iterator it = pool->servers.begin(); it != pool->servers.end();) {
+    if (found) {
+      /* we need to renumber the servers placed
+         after the removed one, for Lua (custom policies) */
+      it->first = idx++;
+      it++;
+    }
+    else if (it->second == server) {
+      it = pool->servers.erase(it);
+      found = true;
+    } else {
+      idx++;
+      it++;
     }
   }
 }
@@ -709,14 +739,16 @@ void spoofResponseFromString(DNSQuestion& dq, const string& spoofContent)
   }
 }
 
-bool processQuery(LocalStateHolder<NetmaskTree<DynBlock> >& localDynBlock, LocalStateHolder<vector<pair<std::shared_ptr<DNSRule>, std::shared_ptr<DNSAction> > > >& localRulactions, blockfilter_t blockFilter, DNSQuestion& dq, string& poolname, int* delayMsec, const struct timespec& now)
+bool processQuery(LocalStateHolder<NetmaskTree<DynBlock> >& localDynNMGBlock, 
+                  LocalStateHolder<SuffixMatchTree<DynBlock> >& localDynSMTBlock,
+                  LocalStateHolder<vector<pair<std::shared_ptr<DNSRule>, std::shared_ptr<DNSAction> > > >& localRulactions, blockfilter_t blockFilter, DNSQuestion& dq, string& poolname, int* delayMsec, const struct timespec& now)
 {
   {
     WriteLock wl(&g_rings.queryLock);
     g_rings.queryRing.push_back({now,*dq.remote,*dq.qname,dq.len,dq.qtype,*dq.dh});
   }
 
-  if(auto got=localDynBlock->lookup(*dq.remote)) {
+  if(auto got=localDynNMGBlock->lookup(*dq.remote)) {
     if(now < got->second.until) {
       vinfolog("Query from %s dropped because of dynamic block", dq.remote->toStringWithPort());
       g_stats.dynBlocked++;
@@ -724,6 +756,16 @@ bool processQuery(LocalStateHolder<NetmaskTree<DynBlock> >& localDynBlock, Local
       return false;
     }
   }
+
+  if(auto got=localDynSMTBlock->lookup(*dq.qname)) {
+    if(now < got->until) {
+      vinfolog("Query from %s for %s dropped because of dynamic block", dq.remote->toStringWithPort(), dq.qname->toString());
+      g_stats.dynBlocked++;
+      got->blocks++;
+      return false;
+    }
+  }
+
 
   if(blockFilter) {
     std::lock_guard<std::mutex> lock(g_luamutex);
@@ -831,7 +873,8 @@ try
   auto localPolicy = g_policy.getLocal();
   auto localRulactions = g_rulactions.getLocal();
   auto localServers = g_dstates.getLocal();
-  auto localDynBlock = g_dynblockNMG.getLocal();
+  auto localDynNMGBlock = g_dynblockNMG.getLocal();
+  auto localDynSMTBlock = g_dynblockSMT.getLocal();
   auto localPools = g_pools.getLocal();
   struct msghdr msgh;
   struct iovec iov;
@@ -925,7 +968,7 @@ try
       struct timespec now;
       gettime(&now);
 
-      if (!processQuery(localDynBlock, localRulactions, blockFilter, dq, poolname, &delayMsec, now))
+      if (!processQuery(localDynNMGBlock, localDynSMTBlock, localRulactions, blockFilter, dq, poolname, &delayMsec, now))
       {
         continue;
       }
@@ -1532,7 +1575,24 @@ try
       g_verbose=true;
       break;
     case 'V':
-      cout<<"dnsdist "<<VERSION<<endl;
+      cout<<"dnsdist "<<VERSION<<" ("<<LUA_VERSION<<")"<<endl;
+      cout<<"Enabled features: ";
+#ifdef HAVE_DNSCRYPT
+      cout<<"dnscrypt ";
+#endif
+#ifdef HAVE_LIBSODIUM
+      cout<<"libsodium ";
+#endif
+#ifdef HAVE_PROTOBUF
+      cout<<"protobuf ";
+#endif
+#ifdef HAVE_RE2
+      cout<<"re2 ";
+#endif
+#ifdef HAVE_SYSTEMD
+      cout<<"systemd";
+#endif
+      cout<<endl;
       exit(EXIT_SUCCESS);
       break;
     }
@@ -1619,6 +1679,13 @@ try
     }
 #endif
 
+#ifdef HAVE_EBPF
+    if (g_defaultBPFFilter) {
+      g_defaultBPFFilter->addSocket(cs->udpFD);
+      vinfolog("Attaching default BPF Filter to UDP frontend %s", cs->local.toStringWithPort());
+    }
+#endif /* HAVE_EBPF */
+
     SBind(cs->udpFD, cs->local);
     toLaunch.push_back(cs);
     g_frontends.push_back(cs);
@@ -1647,6 +1714,13 @@ try
       SSetsockopt(cs->tcpFD, SOL_SOCKET, SO_REUSEPORT, 1);
     }
 #endif
+#ifdef HAVE_EBPF
+    if (g_defaultBPFFilter) {
+      g_defaultBPFFilter->addSocket(cs->tcpFD);
+      vinfolog("Attaching default BPF Filter to TCP frontend %s", cs->local.toStringWithPort());
+    }
+#endif /* HAVE_EBPF */
+
     //    if(g_vm.count("bind-non-local"))
       bindAny(cs->local.sin4.sin_family, cs->tcpFD);
     SBind(cs->tcpFD, cs->local);
@@ -1675,6 +1749,12 @@ try
       setsockopt(cs->udpFD, IPPROTO_IPV6, IPV6_RECVPKTINFO, &one, sizeof(one)); 
 #endif
     }
+#ifdef HAVE_EBPF
+    if (g_defaultBPFFilter) {
+      g_defaultBPFFilter->addSocket(cs->udpFD);
+      vinfolog("Attaching default BPF Filter to UDP DNSCrypt frontend %s", cs->local.toStringWithPort());
+    }
+#endif /* HAVE_EBPF */
     SBind(cs->udpFD, cs->local);    
     toLaunch.push_back(cs);
     g_frontends.push_back(cs);
@@ -1696,6 +1776,12 @@ try
     if(cs->local.sin4.sin_family == AF_INET6) {
       SSetsockopt(cs->tcpFD, IPPROTO_IPV6, IPV6_V6ONLY, 1);
     }
+#ifdef HAVE_EBPF
+    if (g_defaultBPFFilter) {
+      g_defaultBPFFilter->addSocket(cs->tcpFD);
+      vinfolog("Attaching default BPF Filter to TCP DNSCrypt frontend %s", cs->local.toStringWithPort());
+    }
+#endif /* HAVE_EBPF */
     bindAny(cs->local.sin4.sin_family, cs->tcpFD);
     SBind(cs->tcpFD, cs->local);
     SListen(cs->tcpFD, 64);

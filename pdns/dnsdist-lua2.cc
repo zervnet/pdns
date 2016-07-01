@@ -10,6 +10,7 @@
 #include <map>
 #include <fstream>
 #include <boost/logic/tribool.hpp>
+#include "statnode.hh"
 
 boost::tribool g_noLuaSideEffect;
 
@@ -54,6 +55,42 @@ map<ComboAddress,int> filterScore(const map<ComboAddress, unsigned int,ComboAddr
   return ret;
 }
 
+
+typedef std::function<void(const StatNode&, const StatNode::Stat&, const StatNode::Stat&)> statvisitor_t;
+
+void statNodeRespRing(statvisitor_t visitor)
+{
+  std::lock_guard<std::mutex> lock(g_rings.respMutex);
+  
+  StatNode root;
+  for(const auto& c : g_rings.respRing) {
+    root.submit(c.name, c.dh.rcode, c.requestor);
+  }
+  StatNode::Stat node;
+
+  root.visit([&visitor](const StatNode* node, const StatNode::Stat& self, const StatNode::Stat& children) {
+      visitor(*node, self, children);},  node);  
+
+}
+
+vector<pair<unsigned int, std::unordered_map<string,string> > > getRespRing(boost::optional<int> rcode) 
+{
+  typedef std::unordered_map<string,string>  entry_t;
+  vector<pair<unsigned int, entry_t > > ret;
+  std::lock_guard<std::mutex> lock(g_rings.respMutex);
+  
+  entry_t e;
+  unsigned int count=1;
+  for(const auto& c : g_rings.respRing) {
+    if(rcode && (rcode.get() != c.dh.rcode))
+      continue;
+    e["qname"]=c.name.toString();
+    e["rcode"]=std::to_string(c.dh.rcode);
+    ret.push_back(std::make_pair(count,e));
+    count++;
+  }
+  return ret;
+}
 
 typedef   map<ComboAddress, unsigned int,ComboAddress::addressOnlyLessThan > counts_t;
 map<ComboAddress,int> exceedRespGen(int rate, int seconds, std::function<void(counts_t&, const Rings::Response&)> T) 
@@ -120,6 +157,7 @@ map<ComboAddress,int> exceedRespByterate(int rate, int seconds)
 }
 
 
+
 void moreLua(bool client)
 {
   typedef NetmaskTree<DynBlock> nmts_t;
@@ -143,17 +181,29 @@ void moreLua(bool client)
       struct timespec now;
       gettime(&now);
       boost::format fmt("%-24s %8d %8d %s\n");
-      g_outputBuffer = (fmt % "Netmask" % "Seconds" % "Blocks" % "Reason").str();
+      g_outputBuffer = (fmt % "What" % "Seconds" % "Blocks" % "Reason").str();
       for(const auto& e: slow) {
 	if(now < e->second.until)
 	  g_outputBuffer+= (fmt % e->first.toString() % (e->second.until.tv_sec - now.tv_sec) % e->second.blocks % e->second.reason).str();
       }
+      auto slow2 = g_dynblockSMT.getCopy();
+      slow2.visit([&now, &fmt](const SuffixMatchTree<DynBlock>& node) {
+          if(now <node.d_value.until) {
+            string dom("empty");
+            if(!node.d_value.domain.empty())
+              dom = node.d_value.domain.toString();
+            g_outputBuffer+= (fmt % dom % (node.d_value.until.tv_sec - now.tv_sec) % node.d_value.blocks % node.d_value.reason).str();
+          }
+        });
+
     });
 
   g_lua.writeFunction("clearDynBlocks", []() {
       setLuaSideEffect();
       nmts_t nmg;
       g_dynblockNMG.setState(nmg);
+      SuffixMatchTree<DynBlock> smt;
+      g_dynblockSMT.setState(smt);
     });
 
   g_lua.writeFunction("addDynBlocks", 
@@ -185,6 +235,40 @@ void moreLua(bool client)
 			   }
 			   g_dynblockNMG.setState(slow);
 			 });
+
+  g_lua.writeFunction("addDynBlockSMT", 
+                      [](const vector<pair<unsigned int, string> >&names, const std::string& msg, boost::optional<int> seconds) { 
+                           setLuaSideEffect();
+			   auto slow = g_dynblockSMT.getCopy();
+			   struct timespec until, now;
+			   gettime(&now);
+			   until=now;
+                           int actualSeconds = seconds ? *seconds : 10;
+			   until.tv_sec += actualSeconds; 
+
+ 			   for(const auto& capair : names) {
+			     unsigned int count = 0;
+                             DNSName domain(capair.second);
+                             auto got = slow.lookup(domain);
+                             bool expired=false;
+			     if(got) {
+			       if(until < got->until) // had a longer policy
+				 continue;
+			       if(now < got->until) // only inherit count on fresh query we are extending
+				 count=got->blocks;
+                               else
+                                 expired=true;
+			     }
+
+			     DynBlock db{msg,until,domain};
+			     db.blocks=count;
+                             if(!got || expired)
+                               warnlog("Inserting dynamic block for %s for %d seconds: %s", domain, actualSeconds, msg);
+			     slow.add(domain, db);
+			   }
+			   g_dynblockSMT.setState(slow);
+			 });
+
 
 
   g_lua.registerFunction<bool(nmts_t::*)(const ComboAddress&)>("match", 
@@ -221,6 +305,20 @@ void moreLua(bool client)
 	});
     });
 
+  g_lua.writeFunction("getRespRing", getRespRing);
+
+  g_lua.registerFunction<StatNode, unsigned int()>("numChildren", 
+                                                      [](StatNode& sn) -> unsigned int {
+
+                                                        return sn.children.size();
+                                                      } );
+
+  g_lua.registerMember("fullname", &StatNode::fullname);
+  g_lua.registerMember("servfails", &StatNode::Stat::servfails);
+  g_lua.registerMember("nxdomains", &StatNode::Stat::nxdomains);
+  g_lua.registerMember("queries", &StatNode::Stat::queries);
+
+  g_lua.writeFunction("statNodeRespRing", statNodeRespRing);
 
   g_lua.writeFunction("getTopBandwidth", [](unsigned int top) {
       setLuaNoSideEffect();
@@ -579,9 +677,8 @@ void moreLua(bool client)
         return std::make_shared<RemoteLogger>(ComboAddress(remote), timeout ? *timeout : 2, maxQueuedEntries ? *maxQueuedEntries : 100, reconnectWaitTime ? *reconnectWaitTime : 1);
       });
 
-    g_lua.writeFunction("TeeAction", [](const std::string& remote) {
-        setLuaNoSideEffect();
-        return std::shared_ptr<DNSAction>(new TeeAction(ComboAddress(remote, 53)));
+    g_lua.writeFunction("TeeAction", [](const std::string& remote, boost::optional<bool> addECS) {
+        return std::shared_ptr<DNSAction>(new TeeAction(ComboAddress(remote, 53), addECS ? *addECS : false));
       });
 
     g_lua.registerFunction<void(DNSAction::*)()>("printStats", [](const DNSAction& ta) {
@@ -660,4 +757,142 @@ void moreLua(bool client)
         g_resprulactions.setState(rules);
       });
 
+    g_lua.writeFunction("showBinds", []() {
+      setLuaNoSideEffect();
+      try {
+        ostringstream ret;
+        boost::format fmt("%1$-3d %2$-20.20s %|25t|%3$-8.8s %|35t|%4%" );
+        //             1    2           3            4
+        ret << (fmt % "#" % "Address" % "Protocol" % "Queries" ) << endl;
+
+        size_t counter = 0;
+        for (const auto& front : g_frontends) {
+          ret << (fmt % counter % front->local.toStringWithPort() % (front->udpFD != -1 ? "UDP" : "TCP") % front->queries) << endl;
+          counter++;
+        }
+        g_outputBuffer=ret.str();
+      }catch(std::exception& e) { g_outputBuffer=e.what(); throw; }
+    });
+
+    g_lua.writeFunction("getBind", [](size_t num) {
+        setLuaNoSideEffect();
+        ClientState* ret = nullptr;
+        if(num < g_frontends.size()) {
+          ret=g_frontends[num];
+        }
+        return ret;
+      });
+
+    g_lua.registerFunction<std::string(ClientState::*)()>("toString", [](const ClientState& fe) {
+        setLuaNoSideEffect();
+        return fe.local.toStringWithPort();
+      });
+
+#ifdef HAVE_EBPF
+    g_lua.writeFunction("newBPFFilter", [](uint32_t maxV4, uint32_t maxV6, uint32_t maxQNames) {
+        return std::make_shared<BPFFilter>(maxV4, maxV6, maxQNames);
+      });
+
+    g_lua.registerFunction<void(std::shared_ptr<BPFFilter>::*)(const ComboAddress& ca)>("block", [](std::shared_ptr<BPFFilter> bpf, const ComboAddress& ca) {
+        if (bpf) {
+          return bpf->block(ca);
+        }
+      });
+
+    g_lua.registerFunction<void(std::shared_ptr<BPFFilter>::*)(const DNSName& qname, boost::optional<uint16_t> qtype)>("blockQName", [](std::shared_ptr<BPFFilter> bpf, const DNSName& qname, boost::optional<uint16_t> qtype) {
+        if (bpf) {
+          return bpf->block(qname, qtype ? *qtype : 255);
+        }
+      });
+
+    g_lua.registerFunction<void(std::shared_ptr<BPFFilter>::*)(const ComboAddress& ca)>("unblock", [](std::shared_ptr<BPFFilter> bpf, const ComboAddress& ca) {
+        if (bpf) {
+          return bpf->unblock(ca);
+        }
+      });
+
+    g_lua.registerFunction<void(std::shared_ptr<BPFFilter>::*)(const DNSName& qname, boost::optional<uint16_t> qtype)>("unblockQName", [](std::shared_ptr<BPFFilter> bpf, const DNSName& qname, boost::optional<uint16_t> qtype) {
+        if (bpf) {
+          return bpf->unblock(qname, qtype ? *qtype : 255);
+        }
+      });
+
+    g_lua.registerFunction<std::string(std::shared_ptr<BPFFilter>::*)()>("getStats", [](const std::shared_ptr<BPFFilter> bpf) {
+        setLuaNoSideEffect();
+        std::string res;
+        if (bpf) {
+          std::vector<std::pair<ComboAddress, uint64_t> > stats = bpf->getAddrStats();
+          for (const auto& value : stats) {
+            if (value.first.sin4.sin_family == AF_INET) {
+              res += value.first.toString() + ": " + std::to_string(value.second) + "\n";
+            }
+            else if (value.first.sin4.sin_family == AF_INET6) {
+              res += "[" + value.first.toString() + "]: " + std::to_string(value.second) + "\n";
+            }
+          }
+          std::vector<std::tuple<DNSName, uint16_t, uint64_t> > qstats = bpf->getQNameStats();
+          for (const auto& value : qstats) {
+            res += std::get<0>(value).toString() + " " + std::to_string(std::get<1>(value)) + ": " + std::to_string(std::get<2>(value)) + "\n";
+          }
+        }
+        return res;
+      });
+
+    g_lua.registerFunction<void(std::shared_ptr<BPFFilter>::*)()>("attachToAllBinds", [](std::shared_ptr<BPFFilter> bpf) {
+        std::string res;
+        if (bpf) {
+          for (const auto& front : g_frontends) {
+            bpf->addSocket(front->udpFD != -1 ? front->udpFD : front->tcpFD);
+          }
+        }
+      });
+
+    g_lua.registerFunction<void(ClientState::*)(std::shared_ptr<BPFFilter>)>("attachFilter", [](ClientState& frontend, std::shared_ptr<BPFFilter> bpf) {
+        if (bpf) {
+          bpf->addSocket(frontend.udpFD != -1 ? frontend.udpFD : frontend.tcpFD);
+        }
+    });
+
+    g_lua.writeFunction("setDefaultBPFFilter", [](std::shared_ptr<BPFFilter> bpf) {
+        if (g_configurationDone) {
+          g_outputBuffer="setDefaultBPFFilter() cannot be used at runtime!\n";
+          return;
+        }
+        g_defaultBPFFilter = bpf;
+      });
+
+    g_lua.writeFunction("newDynBPFFilter", [](std::shared_ptr<BPFFilter> bpf) {
+        return std::make_shared<DynBPFFilter>(bpf);
+      });
+
+    g_lua.registerFunction<void(std::shared_ptr<DynBPFFilter>::*)(const ComboAddress& addr, boost::optional<int> seconds)>("block", [](std::shared_ptr<DynBPFFilter> dbpf, const ComboAddress& addr, boost::optional<int> seconds) {
+        if (dbpf) {
+          struct timespec until;
+          clock_gettime(CLOCK_MONOTONIC, &until);
+          until.tv_sec += seconds ? *seconds : 10;
+          dbpf->block(addr, until);
+        }
+    });
+
+    g_lua.registerFunction<void(std::shared_ptr<DynBPFFilter>::*)()>("purgeExpired", [](std::shared_ptr<DynBPFFilter> dbpf) {
+        if (dbpf) {
+          struct timespec now;
+          clock_gettime(CLOCK_MONOTONIC, &now);
+          dbpf->purgeExpired(now);
+        }
+    });
+
+    g_lua.writeFunction("addBPFFilterDynBlocks", [](const map<ComboAddress,int>& m, std::shared_ptr<DynBPFFilter> dynbpf, boost::optional<int> seconds) {
+        setLuaSideEffect();
+        struct timespec until, now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        until=now;
+        int actualSeconds = seconds ? *seconds : 10;
+        until.tv_sec += actualSeconds;
+        for(const auto& capair : m) {
+          dynbpf->block(capair.first, until);
+        }
+      });
+
+#endif /* HAVE_EBPF */
 }

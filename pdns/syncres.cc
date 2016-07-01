@@ -207,6 +207,11 @@ bool SyncRes::doOOBResolve(const DNSName &qname, const QType &qtype, vector<DNSR
     somedata=true;
     if(qtype.getCode()==QType::ANY || ziter->d_type==qtype.getCode() || ziter->d_type==QType::CNAME)  // let rest of nameserver do the legwork on this one
       ret.push_back(*ziter);
+    else if(ziter->d_type == QType::NS) { // we hit a delegation point!
+      DNSRecord dr=*ziter;
+      dr.d_place=DNSResourceRecord::AUTHORITY;
+      ret.push_back(dr);
+    }
   }
   if(!ret.empty()) {
     LOG(prefix<<qname.toString()<<": exact match in zone '"<<authdomain.toString()<<"'"<<endl);
@@ -1055,7 +1060,7 @@ int SyncRes::doResolveAt(NsSet &nameservers, DNSName auth, bool flawedNSSet, con
 	    if(s_maxtotusec && d_totUsec > s_maxtotusec)
 	      throw ImmediateServFailException("Too much time waiting for "+qname.toString()+"|"+qtype.getName()+", timeouts: "+std::to_string(d_timeouts) +", throttles: "+std::to_string(d_throttledqueries) + ", queries: "+std::to_string(d_outqueries)+", "+std::to_string(d_totUsec/1000)+"msec");
 
-	    if(d_pdl && d_pdl->preoutquery(*remoteIP, d_requestor, qname, qtype, lwr.d_records, resolveret)) {
+	    if(d_pdl && d_pdl->preoutquery(*remoteIP, d_requestor, qname, qtype, doTCP, lwr.d_records, resolveret)) {
 	      LOG(prefix<<qname.toString()<<": query handled by Lua"<<endl);
 	    }
 	    else {
