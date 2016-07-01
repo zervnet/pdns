@@ -638,7 +638,6 @@ static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequ
  *    The server returns 201 OK and all public data about the new cryptokey
  *  Case 8: With specified content
  *    The server returns 201 OK and all public data about the added cryptokey
- *    
  */
 
 static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpResponse *resp) {
