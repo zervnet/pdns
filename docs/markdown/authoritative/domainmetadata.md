@@ -1,10 +1,16 @@
 # Per zone settings aka Domain Metadata
-Starting with the PowerDNS Authoritative Server 3.0, each served zone can have
-"metadata". Such metadata determines how this zone behaves in certain circumstances.
+Each served zone can have "metadata". Such metadata determines how this zone
+behaves in certain circumstances.
 
 **Warning**: Domain metadata is only available for DNSSEC capable backends! Make
 sure to enable the proper '-dnssec' setting to benefit, and to have performed
 the DNSSEC schema update.
+
+For the BIND backend, this information is either stored in the
+[`bind-dnssec-db`](backend-bind.md) or the hybrid database, depending on your
+settings.
+
+For the implementation in non-sql backends, please review your backend's documentation.
 
 ## ALLOW-AXFR-FROM
 Starting with the PowerDNS Authoritative Server 3.1, per-zone AXFR ACLs can be
@@ -25,13 +31,19 @@ insert into domainmetadata (domain_id, kind, content) values (7,'ALLOW-AXFR-FROM
 To dissallow all IP's, except those explicitly allowed by domainmetadata records, add `allow-axfr-ips=` to `pdns.conf`.
 
 ## AXFR-SOURCE
-The IP address to use as a source address for sending AXFR requests.
+The IP address to use as a source address for sending AXFR and IXFR requests.
 
 ## ALLOW-DNSUPDATE-FROM, TSIG-ALLOW-DNSUPDATE, FORWARD-DNSUPDATE, SOA-EDIT-DNSUPDATE
 See the documentation on [Dynamic DNS update](dnsupdate.md)
 
 ## ALSO-NOTIFY
 When notifying this domain, also notify this nameserver (can occur multiple times).
+The nameserver may have contain an optional port number. e.g.:
+
+```
+insert into domainmetadata (domain_id, kind, content) values (7,'ALSO-NOTIFY','192.0.2.1:5300');
+insert into domainmetadata (domain_id, kind, content) values (7,'ALLOW-AXFR-FROM','2001:db8:53::1');
+```
 
 ## AXFR-MASTER-TSIG
 Use this named TSIG key to retrieve this zone from its master, see
@@ -44,6 +56,9 @@ Allow this GSS principal to perform AXFR retrieval. Most commonly it is
 
 ## GSS-ACCEPTOR-PRINCIPAL
 Use this principal for accepting GSS context. (See [GSS-TSIG support](tsig.md#gss-tsig-support)).
+
+## IXFR
+If set to 1, attempt IXFR when retrieving zone updates. Otherwise IXFR is not attempted.
 
 ## LUA-AXFR-SCRIPT
 Script to be used to edit incoming AXFRs, see [Modifying a slave zone using a script](modes-of-operation.md#modifying-a-slave-zone-using-a-script).
@@ -64,6 +79,9 @@ records in the zone. However, if you import a presigned zone using `zone2sql` or
 `pdnsutil load-zone` you must explicitly set the zone to be `PRESIGNED`. Note that
 PowerDNS will not be able to correctly serve the zone if the imported data is
 bogus or incomplete. Also see `set-presigned` in [`pdnsutil`](dnssec.md#pdnsutil).
+
+If a zone is presigned, the content of the metadata must be "1" (without the
+quotes). Any other value will not signal prisignedness.
 
 ## PUBLISH-CDNSKEY, PUBLISH-CDS
 Whether to publish CDNSKEY and/or CDS recording defined in [RFC 7344](https://tools.ietf.org/html/rfc7344).

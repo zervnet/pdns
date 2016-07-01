@@ -34,6 +34,12 @@ class ApiTestCase(unittest.TestCase):
         self.assertTrue(400 <= result.status_code < 600, "Response has not an error code "+str(result.status_code))
         self.assertEquals(result.headers['Content-Type'], 'application/json', "Response status code "+str(result.status_code))
 
+    def assert_success(self, result):
+        try:
+            result.raise_for_status()
+        except:
+            print result.content
+            raise
 
 
 def unique_zone_name():

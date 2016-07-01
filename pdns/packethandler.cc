@@ -870,6 +870,10 @@ int PacketHandler::processNotify(DNSPacket *p)
       return RCode::Refused;
     }
   }
+  else if(::arg().mustDo("master") && di.kind == DomainInfo::Master) {
+    L<<Logger::Error<<"Received NOTIFY for "<<p->qdomain<<" from "<<p->getRemote()<<" but we are master, rejecting"<<endl;
+    return RCode::Refused;
+  }
   else if(!db->isMaster(p->qdomain, p->getRemote())) {
     L<<Logger::Error<<"Received NOTIFY for "<<p->qdomain<<" from "<<p->getRemote()<<" which is not a master"<<endl;
     return RCode::Refused;
@@ -879,6 +883,26 @@ int PacketHandler::processNotify(DNSPacket *p)
   di.backend = 0;
   Communicator.addSlaveCheckRequest(di, p->d_remote);
   return 0;
+}
+
+bool validDNSName(const DNSName &name)
+{
+  if (!g_8bitDNS) {
+    string::size_type pos, length;
+    char c;
+    for(const auto& s : name.getRawLabels()) {
+      length=s.length();
+      for(pos=0; pos < length; ++pos) {
+        c=s[pos];
+        if(!((c >= 'a' && c <= 'z') ||
+             (c >= 'A' && c <= 'Z') ||
+             (c >= '0' && c <= '9') ||
+             c =='-' || c == '_' || c=='*' || c=='.' || c=='/' || c=='@' || c==' ' || c=='\\' || c==':'))
+          return false;
+      }
+    }
+  }
+  return true;
 }
 
 DNSPacket *PacketHandler::question(DNSPacket *p)
@@ -1158,15 +1182,15 @@ DNSPacket *PacketHandler::questionOrRecurse(DNSPacket *p, bool *shouldRecurse)
 
     // XXX FIXME do this in DNSPacket::parse ?
 
-    // if(!validDNSName(p->qdomain)) {
-    //   if(d_logDNSDetails)
-    //     L<<Logger::Error<<"Received a malformed qdomain from "<<p->getRemote()<<", '"<<p->qdomain<<"': sending servfail"<<endl;
-    //   S.inc("corrupt-packets");
-    //   S.ringAccount("remotes-corrupt", p->d_remote);
-    //   S.inc("servfail-packets");
-    //   r->setRcode(RCode::ServFail);
-    //   return r;
-    // }
+    if(!validDNSName(p->qdomain)) {
+      if(d_logDNSDetails)
+        L<<Logger::Error<<"Received a malformed qdomain from "<<p->getRemote()<<", '"<<p->qdomain<<"': sending servfail"<<endl;
+      S.inc("corrupt-packets");
+      S.ringAccount("remotes-corrupt", p->d_remote);
+      S.inc("servfail-packets");
+      r->setRcode(RCode::ServFail);
+      return r;
+    }
     if(p->d.opcode) { // non-zero opcode (again thanks RA!)
       if(p->d.opcode==Opcode::Update) {
         S.inc("dnsupdate-queries");

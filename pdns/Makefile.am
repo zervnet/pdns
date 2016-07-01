@@ -78,15 +78,13 @@ bin_PROGRAMS = \
 
 if TOOLS
 bin_PROGRAMS += \
-	dnsbulktest \
 	dnsgram \
 	dnsreplay \
 	dnsscan \
 	dnsscope \
-	dnstcpbench \
 	dnswasher \
 	dumresp \
-	notify \
+	pdns_notify \
 	nproxy \
 	nsec3dig \
 	saxfr \
@@ -96,6 +94,12 @@ bin_PROGRAMS += \
 
 if HAVE_RECVMMSG
 bin_PROGRAMS += calidns
+endif
+
+if HAVE_BOOST_GE_148
+bin_PROGRAMS += \
+	dnsbulktest \
+	dnstcpbench
 endif
 
 endif
@@ -114,7 +118,7 @@ EXTRA_PROGRAMS = \
 	dumresp \
 	kvresp \
 	ixplore \
-	notify \
+	pdns_notify \
 	nproxy \
 	nsec3dig \
 	saxfr \
@@ -161,6 +165,7 @@ pdns_server_SOURCES = \
 	ednssubnet.cc ednssubnet.hh \
 	gss_context.cc gss_context.hh \
 	iputils.cc iputils.hh \
+	ixfr.cc ixfr.hh \
 	json.cc json.hh \
 	lock.hh \
 	logger.cc logger.hh \
@@ -923,7 +928,7 @@ nproxy_LDADD = \
 	$(OPENSSL_LIBS) \
 	$(BOOST_PROGRAM_OPTIONS_LIBS)
 
-notify_SOURCES = \
+pdns_notify_SOURCES = \
 	arguments.cc \
 	base32.cc \
 	base64.cc base64.hh \
@@ -944,12 +949,12 @@ notify_SOURCES = \
 	statbag.cc \
 	unix_utility.cc
 
-notify_LDFLAGS = \
+pdns_notify_LDFLAGS = \
 	$(AM_LDFLAGS) \
 	$(OPENSSL_LDFLAGS) \
 	$(BOOST_PROGRAM_OPTIONS_LDFLAGS)
 
-notify_LDADD = \
+pdns_notify_LDADD = \
 	$(OPENSSL_LIBS) \
 	$(BOOST_PROGRAM_OPTIONS_LIBS)
 
@@ -972,6 +977,7 @@ dnsscope_SOURCES = \
 	rcpgenerator.cc rcpgenerator.hh \
 	sillyrecords.cc \
 	statbag.cc \
+	statnode.cc statnode.hh \
 	unix_utility.cc \
 	utility.hh
 
@@ -1040,7 +1046,7 @@ dnsdemog_LDADD = \
 
 if HAVE_PROTOBUF
 if HAVE_PROTOC
-EXTRA_PROGRAMS += dnspcap2protobuf
+bin_PROGRAMS += dnspcap2protobuf
 
 dnsmessage.pb.cc: dnsmessage.proto
 	$(AM_V_GEN)$(PROTOC) --cpp_out=./ $<
@@ -1156,6 +1162,18 @@ testrunner_LDADD = \
 	$(RT_LIBS) \
 	$(LIBDL)
 
+if HAVE_PROTOBUF
+if HAVE_PROTOC
+nodist_testrunner_SOURCES = \
+	dnsmessage.pb.cc dnsmessage.pb.h
+
+testrunner_LDADD += \
+	$(PROTOBUF_LIBS)
+
+recpacketcache.$(OBJEXT): dnsmessage.pb.cc
+endif
+endif
+
 if PKCS11
 testrunner_SOURCES += pkcs11signers.cc pkcs11signers.hh
 testrunner_LDADD += $(P11KIT1_LIBS)
@@ -1174,8 +1192,15 @@ pdns_control_SOURCES = \
 	dnslabeltext.cc
 
 if UNIT_TESTS
+
+if HAVE_BOOST_GE_148
 TESTS_ENVIRONMENT = env BOOST_TEST_LOG_LEVEL=message SRCDIR='$(srcdir)'
 TESTS=testrunner
+else
+check-local:
+	@echo "Unit tests disabled, boost is too old"
+endif
+
 else
 check-local:
 	@echo "Unit tests are not enabled"
@@ -1191,6 +1216,8 @@ bind-dnssec.schema.sqlite3.sql.h: bind-dnssec.schema.sqlite3.sql
 # for bindparser.h/hh
 .hh.h:
 	cp $< $@
+
+bindlexer.$(OBJEXT): bindparser.h
 
 curl_verbose = $(curl_verbose_$(V))
 curl_verbose_ = $(curl_verbose_$(AM_DEFAULT_VERBOSITY))

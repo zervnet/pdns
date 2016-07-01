@@ -13,7 +13,7 @@ string dotName(string type, DNSName name, string tag);
 string dotEscape(string name);
 
 const char *dStates[]={"nodata", "nxdomain", "empty non-terminal", "insecure (no-DS proof)"};
-const char *vStates[]={"Indeterminate", "Bogus", "Insecure", "Secure"};
+const char *vStates[]={"Indeterminate", "Bogus", "Insecure", "Secure", "NTA"};
 
 typedef set<DNSKEYRecordContent> keyset_t;
 vector<DNSKEYRecordContent> getByTag(const keyset_t& keys, uint16_t tag)
@@ -88,12 +88,12 @@ void validateWithKeySet(const cspmap_t& rrsets, cspmap_t& validated, const keyse
   }
   */
   for(auto i=rrsets.begin(); i!=rrsets.end(); i++) {
-    //    cerr<<"validating "<<(i->first.first)<<"/"<<DNSRecordContent::NumberToType(i->first.second)<<" with "<<i->second.signatures.size()<<" sigs: ";
+    LOG("validating "<<(i->first.first)<<"/"<<DNSRecordContent::NumberToType(i->first.second)<<" with "<<i->second.signatures.size()<<" sigs"<<endl);
     for(const auto& signature : i->second.signatures) {
       vector<shared_ptr<DNSRecordContent> > toSign = i->second.records;
       
       if(getByTag(keys,signature->d_tag).empty()) {
-	//	cerr<<"No key provided for "<<signature->d_tag<<endl;
+	LOG("No key provided for "<<signature->d_tag<<endl;);
 	continue;
       }
       
@@ -106,6 +106,7 @@ void validateWithKeySet(const cspmap_t& rrsets, cspmap_t& validated, const keyse
 	  if(signature->d_siginception < now && signature->d_sigexpire > now) {
 	    std::shared_ptr<DNSCryptoKeyEngine> dke = shared_ptr<DNSCryptoKeyEngine>(DNSCryptoKeyEngine::makeFromPublicKeyString(l.d_algorithm, l.d_key));
 	    isValid = dke->verify(msg, signature->d_signature);
+            LOG("signature by key with tag "<<signature->d_tag<<" was " << (isValid ? "" : "NOT ")<<"valid"<<endl);
 	  }
 	  else {
 	    LOG("signature is expired/not yet valid"<<endl);
@@ -116,8 +117,9 @@ void validateWithKeySet(const cspmap_t& rrsets, cspmap_t& validated, const keyse
 	}
 	if(isValid) {
 	  validated[i->first] = i->second;
+          LOG("Validated "<<i->first.first<<"/"<<DNSRecordContent::NumberToType(signature->d_type)<<endl);
 	  //	  cerr<<"valid"<<endl;
-	  //	  cerr<<"! validated "<<i->first.first<<"/"<<DNSRecordContent::NumberToType(signature->d_type)<<endl;
+	  //	  cerr<<"! validated "<<i->first.first<<"/"<<)<<endl;
 	}
 	else {
           LOG("signature invalid"<<endl);
@@ -165,6 +167,41 @@ cspmap_t harvestCSPFromRecs(const vector<DNSRecord>& recs)
 
 vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
 {
+  auto luaLocal = g_luaconfs.getLocal();
+  auto anchors = luaLocal->dsAnchors;
+  // Determine the lowest (i.e. with the most labels) Trust Anchor for zone
+  DNSName lowestTA(".");
+  for (auto const &anchor : anchors)
+    if (zone.isPartOf(anchor.first) && lowestTA.countLabels() < anchor.first.countLabels())
+      lowestTA = anchor.first;
+
+  // Before searching for the keys, see if we have a Negative Trust Anchor. If
+  // so, test if the NTA is valid and return an NTA state
+  auto negAnchors = luaLocal->negAnchors;
+
+  if (!negAnchors.empty()) {
+    DNSName lowestNTA;
+
+    for (auto const &negAnchor : negAnchors)
+      if (zone.isPartOf(negAnchor.first) && lowestNTA.countLabels() < negAnchor.first.countLabels())
+        lowestNTA = negAnchor.first;
+
+    if(!lowestNTA.empty()) {
+      LOG("Found a Negative Trust Anchor for "<<lowestNTA.toStringRootDot()<<", which was added with reason '"<<negAnchors[lowestNTA]<<"', ");
+
+      /* RFC 7646 section 2.1 tells us that we SHOULD still validate if there
+       * is a Trust Anchor below the Negative Trust Anchor for the name we
+       * attempt validation for. However, section 3 tells us this positive
+       * Trust Anchor MUST be *below* the name and not the name itself
+       */
+      if(lowestTA.countLabels() < lowestNTA.countLabels()) {
+        LOG("marking answer Insecure"<<endl);
+        return NTA; // Not Insecure, this way validateRecords() can shortcut
+      }
+      LOG("but a Trust Anchor for "<<lowestTA.toStringRootDot()<<" is configured, continuing validation."<<endl);
+    }
+  }
+
   vector<string> labels = zone.getRawLabels();
   vState state;
 
@@ -174,9 +211,9 @@ vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
   dsmap_t dsmap;
   keyset_t validkeys;
 
-  DNSName qname(".");
-  state = Secure; // the root is secure
-  auto luaLocal = g_luaconfs.getLocal();
+  DNSName qname = lowestTA;
+  state = Secure; // the lowest Trust Anchor is secure
+
   while(zone.isPartOf(qname))
   {
     if(auto ds = rplookup(luaLocal->dsAnchors, qname))
@@ -204,6 +241,7 @@ vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
       if(rec.d_type == QType::RRSIG)
       {
         auto rrc=getRR<RRSIGRecordContent> (rec);
+        LOG("Got signature: "<<rrc->getZoneRepresentation()<<" with tag "<<rrc->d_tag<<", for type "<<DNSRecordContent::NumberToType(rrc->d_type)<<endl);
         if(rrc && rrc->d_type != QType::DNSKEY)
           continue;
         sigs.push_back(*rrc);
@@ -213,15 +251,15 @@ vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
         auto drc=getRR<DNSKEYRecordContent> (rec);
         if(drc) {
           tkeys.insert(*drc);
-          //	cerr<<"Inserting key with tag "<<drc->getTag()<<": "<<drc->getZoneRepresentation()<<endl;
-          dotNode("DNSKEY", qname, std::to_string(drc->getTag()), (boost::format("tag=%d, algo=%d") % drc->getTag() % static_cast<int>(drc->d_algorithm)).str());
+          LOG("Inserting key with tag "<<drc->getTag()<<": "<<drc->getZoneRepresentation()<<endl);
+          //          dotNode("DNSKEY", qname, std::to_string(drc->getTag()), (boost::format("tag=%d, algo=%d") % drc->getTag() % static_cast<int>(drc->d_algorithm)).str());
 
           toSign.push_back(rec.d_content);
           toSignTags.push_back(drc->getTag());
         }
       }
     }
-    //    cerr<<"got "<<tkeys.size()<<" keys and "<<sigs.size()<<" sigs from server"<<endl;
+    LOG("got "<<tkeys.size()<<" keys and "<<sigs.size()<<" sigs from server"<<endl);
 
     for(dsmap_t::const_iterator i=dsmap.begin(); i!=dsmap.end(); i++)
     {
@@ -238,11 +276,11 @@ vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
 	  isValid = dsrc == dsrc2;
 	} 
 	catch(std::exception &e) {
-	  //	  cerr<<"Unable to make DS from DNSKey: "<<e.what()<<endl;
+	  LOG("Unable to make DS from DNSKey: "<<e.what()<<endl);
 	}
 
         if(isValid) {
-	  LOG("got valid DNSKEY (it matches the DS) for "<<qname<<endl);
+	  LOG("got valid DNSKEY (it matches the DS) with tag "<<dsrc.d_tag<<"/"<<i->first<<" for "<<qname<<endl);
 	  
           validkeys.insert(drc);
 	  dotNode("DS", qname, "" /*std::to_string(dsrc.d_tag)*/, (boost::format("tag=%d, digest algo=%d, algo=%d") % dsrc.d_tag % static_cast<int>(dsrc.d_digesttype) % static_cast<int>(dsrc.d_algorithm)).str());
@@ -281,7 +319,7 @@ vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
 	    }
 	  }
 	  catch(std::exception& e) {
-	    //	    cerr<<"Could not make a validator for signature: "<<e.what()<<endl;
+	    LOG("Could not make a validator for signature: "<<e.what()<<endl);
 	  }
 	  for(uint16_t tag : toSignTags) {
 	    dotEdge(qname,

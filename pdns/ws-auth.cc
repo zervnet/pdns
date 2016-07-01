@@ -291,7 +291,8 @@ void AuthWebServer::indexfunction(HttpRequest* req, HttpResponse* resp)
 /** Helper to build a record content as needed. */
 static inline string makeRecordContent(const QType& qtype, const string& content, bool noDot) {
   // noDot: for backend storage, pass true. for API users, pass false.
-  return DNSRecordContent::mastermake(qtype.getCode(), 1, content)->getZoneRepresentation(noDot);
+  std::unique_ptr<DNSRecordContent> drc(DNSRecordContent::mastermake(qtype.getCode(), 1, content));
+  return drc->getZoneRepresentation(noDot);
 }
 
 /** "Normalize" record content for API consumers. */
@@ -982,7 +983,8 @@ static void apiServerZoneDetail(HttpRequest* req, HttpResponse* resp) {
 
     updateDomainSettingsFromDocument(di, zonename, req->json());
 
-    fillZone(zonename, resp);
+    resp->body = "";
+    resp->status = 204; // No Content, but indicate success
     return;
   }
   else if(req->method == "DELETE" && !::arg().mustDo("api-readonly")) {
@@ -1291,8 +1293,9 @@ static void patchZone(HttpRequest* req, HttpResponse* resp) {
   // now the PTRs
   storeChangedPTRs(B, new_ptrs);
 
-  // success
-  fillZone(zonename, resp);
+  resp->body = "";
+  resp->status = 204; // No Content, but indicate success
+  return;
 }
 
 static void apiServerSearchData(HttpRequest* req, HttpResponse* resp) {

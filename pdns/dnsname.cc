@@ -200,8 +200,12 @@ bool DNSName::isPartOf(const DNSName& parent) const
     return false;
 
   // this is slightly complicated since we can't start from the end, since we can't see where a label begins/ends then
-  for(auto us=d_storage.cbegin(); us<d_storage.cend() && std::distance(us,d_storage.cend()) >= static_cast<unsigned int>(parent.d_storage.size()); us+=*us+1) {
-    if (std::distance(us,d_storage.cend()) == static_cast<unsigned int>(parent.d_storage.size())) {
+  for(auto us=d_storage.cbegin(); us<d_storage.cend(); us+=*us+1) {
+    auto distance = std::distance(us,d_storage.cend());
+    if (distance < 0 || static_cast<size_t>(distance) < parent.d_storage.size()) {
+      break;
+    }
+    if (static_cast<size_t>(distance) == parent.d_storage.size()) {
       auto p = parent.d_storage.cbegin();
       for(; us != d_storage.cend(); ++us, ++p) {
         if(dns2_tolower(*p) != dns2_tolower(*us))
@@ -260,7 +264,7 @@ void DNSName::appendRawLabel(const char* start, unsigned int length)
     throw std::range_error("no such thing as an empty label to append");
   if(length > 63)
     throw std::range_error("label too long to append");
-  if(d_storage.size() + length > 254) // reserve two bytes, one for length and one for the root label
+  if(d_storage.size() + length > 254) // reserve one byte for the label length
     throw std::range_error("name too long to append");
 
   if(d_storage.empty()) {
@@ -279,7 +283,7 @@ void DNSName::prependRawLabel(const std::string& label)
     throw std::range_error("no such thing as an empty label to prepend");
   if(label.size() > 63)
     throw std::range_error("label too long to prepend");
-  if(d_storage.size() + label.size() > 254) // reserve two bytes, one for length and one for the root label
+  if(d_storage.size() + label.size() > 254) // reserve one byte for the label length
     throw std::range_error("name too long to prepend");
 
   if(d_storage.empty())

@@ -46,6 +46,7 @@ EXTRA_DIST = \
 	effective_tld_names.dat \
 	epollmplexer.cc \
 	kqueuemplexer.cc \
+	lua_hpp.mk \
 	malloctrace.cc malloctrace.hh \
 	mtasker.cc \
 	mtasker_fcontext.cc mtasker_ucontext.cc \
@@ -132,6 +133,12 @@ pdns_recursor_SOURCES = \
 	ws-api.cc ws-api.hh \
 	ws-recursor.cc ws-recursor.hh \
 	zoneparser-tng.cc zoneparser-tng.hh
+
+if !HAVE_LUA_HPP
+BUILT_SOURCES += lua.hpp
+nodist_pdns_recursor_SOURCES = lua.hpp
+CLEANFILES += lua.hpp
+endif
 
 pdns_recursor_LDADD = \
 	$(YAHTTP_LIBS) \
@@ -239,8 +246,18 @@ if HAVE_SYSTEMD
 pdns-recursor.service: pdns-recursor.service.in
 	$(AM_V_GEN)sed -e 's![@]sbindir[@]!$(sbindir)!' < $< > $@
 
+pdns-recursor@.service: pdns-recursor.service
+	$(AM_V_GEN)sed -e 's!/pdns_recursor!& --config-name=%i!' \
+	  -e 's!Recursor!& %i!' \
+	  < $< > $@
+
 systemdsystemunitdir = $(SYSTEMD_DIR)
 
 systemdsystemunit_DATA = \
-	pdns-recursor.service
+	pdns-recursor.service \
+	pdns-recursor@.service
+endif
+
+if !HAVE_LUA_HPP
+include lua_hpp.mk
 endif

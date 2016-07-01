@@ -59,6 +59,7 @@ pages:
   - Recursor:
     - Introduction: recursor/index.md
     - Security of the Recursor: recursor/security.md
+    - DNSSEC in the Recursor: recursor/dnssec.md
     - Recursor Statistics: recursor/stats.md
     - Controlling & Querying: recursor/running.md
     - 'Manpage: pdns_recursor.1': manpages/pdns_recursor.1.md
@@ -98,7 +99,7 @@ pages:
     - 'Manpage: dnstcpbench.1': manpages/dnstcpbench.1.md
     - 'Manpage: dnswasher.1': manpages/dnswasher.1.md
     - 'Manpage: ixplore.1': manpages/ixplore.1.md
-    - 'Manpage: notify.1': manpages/notify.1.md
+    - 'Manpage: pdns_notify.1': manpages/pdns_notify.1.md
     - 'Manpage: nproxy.1': manpages/nproxy.1.md
     - 'Manpage: nsec3dig.1': manpages/nsec3dig.1.md
     - 'Manpage: saxfr.1': manpages/saxfr.1.md

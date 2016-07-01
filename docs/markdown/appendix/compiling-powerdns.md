@@ -14,6 +14,11 @@ To compile a module for inclusion at runtime, which is great if you are a unix
 vendor, use `--with-dynmodules='mod1 mod2 mod3'`. These modules then end up as
 .so files in the compiled libdir.
 
+By default, the [bind](../authoritative/backend-bind.md), [mysql](../authoritative/backend-generic-mysql.md)
+and [random](../authoritative/backend-random.md) are compiled into the binary.
+The [pipe](../authoritative/backend-pipe.md) is, by default, compiled as a runtime
+loadable module.
+
 ## Getting the sources
 There are 3 ways of getting the source. If you want the bleeding edge, you can
 clone the repository at [GitHub](https://github.com/PowerDNS/pdns) and run
@@ -61,3 +66,15 @@ make has some issues with some PowerDNS Makefile constructs.
 When compiling, make sure that you have `/usr/ccs/bin` in your path.
 Furthermore, with some versions of MySQL, you may have to add `LDFLAGS=-lz`
 before `./configure`.
+
+### OpenIndiana
+Compiles on OpenIndiana Hipster with `developer/gcc-49`. Other required packages
+are:
+
+ * bison
+ * boost
+ * developer/gcc-49
+ * flex
+ * libtool
+ * pkg-config
+ * system/header

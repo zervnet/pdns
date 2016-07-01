@@ -4,9 +4,9 @@ if [ "${PDNS_DEBUG}" = "YES" ]; then
   set -x
 fi
 
-export PDNS=${PDNS:-../../../pdns/pdns_server}
-export PDNSRECURSOR=${PDNSRECURSOR:-../../../pdns/recursordist/pdns_recursor}
-export RECCONTROL=${RECCONTROL:-../../../pdns/recursordist/rec_control}
+export PDNS=${PDNS:-${PWD}/../pdns/pdns_server}
+export PDNSRECURSOR=${PDNSRECURSOR:-${PWD}/../pdns/recursordist/pdns_recursor}
+export RECCONTROL=${RECCONTROL:-${PWD}/../pdns/recursordist/rec_control}
 
 . ./vars
 
@@ -402,6 +402,13 @@ ns.not-auth-zone.example.net. 20 IN  A $PREFIX.23
 host1.not-auth-zone.example.net. 20 IN  A 127.0.0.57
 EOF
 
+cat > $PREFIX.23/france.auth-zone.example.net.zone <<EOF
+france.auth-zone.example.net. 3600 IN SOA $SOA
+france.auth-zone.example.net. 3600 IN NS ns1.auth-zone.example.net
+www.france.auth-zone.example.net. 3600 IN A 192.0.2.23
+france.auth-zone.example.net. 3600 IN A 192.0.2.223
+EOF
+
 # And for the recursor
 cat > recursor-service/global.box.answer-cname-in-local.example.net.zone <<EOF
 global.box.answer-cname-in-local.example.net. 3600 IN SOA $SOA
@@ -423,6 +430,8 @@ host2.auth-zone.example.net. 20 IN CNAME host1.another-auth-zone.example.net.
 
 host3.auth-zone.example.net. 20 IN CNAME host1.not-auth-zone.example.net.
 *.wild.auth-zone.example.net.	3600 IN	TXT "Hi there!"
+france.auth-zone.example.net.	20	IN NS 	ns1.auth-zone.example.net.
+ns1.auth-zone.example.net. 	20	IN	A	10.0.3.23
 EOF
 
 mkdir $PREFIX.24

@@ -44,6 +44,27 @@ In addition to this cleanup, which has many internal benefits and solves longsta
 
 Please be aware that beyond the items listed here, there have been heaps of tiny changes. As always, please carefully test a new release before deploying it.
 
+## PowerDNS Recursor 4.0.0-rc1
+Released June 9th 2016
+
+This first (and hopefully last) Release Candidate contains the finishing touches
+to the experimental DNSSEC support by adding (Negative) Trust Anchor support and
+fixing a possible issue with DNSSEC and forwarded domains:
+
+- [#3910](https://github.com/PowerDNS/pdns/pull/3910) Add (Negative) Trust Anchor management
+- [#3926](https://github.com/PowerDNS/pdns/pull/3926) Set +CD on forwarded recursive queries
+
+Other changes:
+
+- [#3941](https://github.com/PowerDNS/pdns/pull/3941) Ensure delegations from local auth zones are followed
+- [#3924](https://github.com/PowerDNS/pdns/pull/3924) Add a virtual hosting unit-file
+- [#3929](https://github.com/PowerDNS/pdns/pull/3929) Set the FDs in the unit file to a sane value
+
+Bug fixes:
+
+- [#3961](https://github.com/PowerDNS/pdns/pull/3961) Fix building on EL6 i386
+- [#3957](https://github.com/PowerDNS/pdns/pull/3957) Add error reporting when parsing forward-zones(-recurse) (Aki Tuomi)
+
 ## PowerDNS Recursor 4.0.0-beta1
 Released May 27th 2016
 
@@ -170,11 +191,37 @@ Important changes:
 - Crypto++ and mbedTLS support is dropped, these are replaced by OpenSSL
 - The INCEPTION, INCEPTION-WEEK and EPOCH SOA-EDIT metadata values are marked as deprecated and will be removed in 4.1
 
-There is one **known issue** that will be fixed before the final 4.0.0 release:
-
-- There is no dynamic signing of synthesized records from ALIAS, these are only signed on outgoing AXFR
-
 to be continued....
+
+## PowerDNS Authoritative Server 4.0.0-rc2
+Released June 29th 2016
+
+**note**: rc1 was tagged in git but never officially released.
+Kees Monshouwer discovered an issue in the gmysql backend that would terminate the daemon on a connection error, this fixed in rc2.
+
+This Release Candidate adds IXFR consumption and fixes some issues with prepared statements:
+
+ - [#3937](https://github.com/PowerDNS/pdns/pull/3937) GSQL: use lazy prepared statements (Aki Tuomi)
+ - [#3949](https://github.com/PowerDNS/pdns/pull/3949) Implement IXFR-based slaving for Authoritative, fix duplicate AXFRs
+ - [#4066](https://github.com/PowerDNS/pdns/pull/4066) Don't die on a mysql timeout (Kees Monshouwer)
+
+Other improvements:
+
+ - [#4061](https://github.com/PowerDNS/pdns/pull/4061) Various fixes, a MySQL-query fix that improves performance and one that allows shorter best matches in getAuth()
+ - [#3962](https://github.com/PowerDNS/pdns/pull/3962) Fix OpenBSD support
+ - [#3972](https://github.com/PowerDNS/pdns/pull/3972) API: change PATCH/PUT on zones to return 204 No Content instead of full zone (Christian Hofstaedtler)
+ - [#3917](https://github.com/PowerDNS/pdns/pull/3917) Remotebackend: Add getAllDomains call (Aki Tuomi)
+
+Bug fixes and changes:
+
+ - [#3998](https://github.com/PowerDNS/pdns/pull/3998) remove gsql::isOurDomain for now (Kees Monshouwer)
+ - [#3989](https://github.com/PowerDNS/pdns/pull/3989) Fix usage of std::distance() in DNSName::isPartOf()
+ - [#4001](https://github.com/PowerDNS/pdns/pull/4001) re enable validDNSName() check (Kees Monshouwer)
+ - [#3930](https://github.com/PowerDNS/pdns/pull/3930) Have pdns_control bind-add-zone check for zonefile
+ - [#3400](https://github.com/PowerDNS/pdns/pull/3400) Fix building on OpenIndiana
+ - [#3961](https://github.com/PowerDNS/pdns/pull/3961) Allow building on CentOS 6 i386
+ - [#3940](https://github.com/PowerDNS/pdns/pull/3940) auth: Don't build dnsbulktest and dnstcpbench if boost is too old, fixes building on CentOS 6
+ - [#3931](https://github.com/PowerDNS/pdns/pull/3931) Rename `notify` to `pdns_notify` (Christian Hofstaedtler)
 
 ## PowerDNS Authoritative Server 4.0.0-beta1
 Released May 27th 2016
