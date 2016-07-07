@@ -603,7 +603,8 @@ static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequ
   if (!B.getDomainInfo(zonename, di))
     throw HttpBadRequestException();
   if (dk.removeKey(zonename, inquireKeyId)) {
-    resp->setSuccessResult("OK", 200);
+    resp->status = 204;
+    resp->body = "";
   } else {
     resp->setErrorResult("Could not DELETE " + req->parameters["key_id"], 422);
   }
@@ -755,7 +756,8 @@ static void apiZoneCryptokeysPUT(DNSName zonename, int inquireKeyId, HttpRequest
       return;
     }
   }
-  resp->setSuccessResult("OK", 200);
+  resp->status = 204;
+  resp->body = "";
 }
 
 /*
