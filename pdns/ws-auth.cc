@@ -603,7 +603,7 @@ static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequ
   if (!B.getDomainInfo(zonename, di))
     throw HttpBadRequestException();
   if (dk.removeKey(zonename, inquireKeyId)) {
-    resp->status = 204;
+    resp->status = 200;
     resp->body = "";
   } else {
     resp->setErrorResult("Could not DELETE " + req->parameters["key_id"], 422);

@@ -49,7 +49,7 @@ class Cryptokeys(ApiTestCase):
 
         #checks the status code. I don't know how to test explicit that the backend fail removing a key.
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+self.keyid))
-        self.assertEquals(r.status_code, 204)
+        self.assertEquals(r.status_code, 200)
         self.assertEquals(r.content, "")
 
         # Check that the key is actually deleted
@@ -70,7 +70,7 @@ class Cryptokeys(ApiTestCase):
         self.remove_zone_key(self.keyid)
         #checks for key is gone. Its ok even if no key had to be deleted. Or something went wrong with the backend.
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+self.zone+"/cryptokeys/"+self.keyid))
-        self.assertEquals(r.status_code, 204)
+        self.assertEquals(r.status_code, 200)
         self.assertEquals(r.content, "")
 
     # Prepares the json object for Post and sends it to the server
