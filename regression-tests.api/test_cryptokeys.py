@@ -11,23 +11,11 @@ class Cryptokeys(ApiTestCase):
     def __init__(self, *args, **kwds):
         super(Cryptokeys, self).__init__(*args, **kwds)
         self.keyid = 0
-        self.zone = "cryptokeyzone"
-
-    def setUp(self):
-        super(Cryptokeys, self).setUp()
-
-        try:
-           subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "create-zone", self.zone], stderr=open(os.devnull, 'wb'))
-        except subprocess.CalledProcessError as e:
-            self.fail("Couldn't create zone: "+e.output)
+        self.zone = "cryptokeys.org"
 
     def tearDown(self):
         super(Cryptokeys,self).tearDown()
         self.remove_zone_key(self.keyid)
-        try:
-            subprocess.check_output(["../pdns/pdnsutil", "--config-dir=.", "delete-zone", self.zone])
-        except subprocess.CalledProcessError as e:
-            self.fail("Couldn't delete zone: "+e.output)
 
     # Adding a key to self.zone using the pdnsutil command
     def add_zone_key(self, status='inactive'):
