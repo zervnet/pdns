@@ -2981,42 +2981,42 @@ loadMainConfig(g_vm["config-dir"].as<string>());
         "PIN: " << pin << std::endl << 
         "Label: " << label << std::endl;
 
-     DNSKEYRecordContent drc; 
-     DNSSECPrivateKey dpk;
-     dpk.d_flags = (keyOrZone ? 257 : 256);
+      DNSKEYRecordContent drc;
+      DNSSECPrivateKey dpk;
+      dpk.d_flags = (keyOrZone ? 257 : 256);
 
-     shared_ptr<DNSCryptoKeyEngine> dke(DNSCryptoKeyEngine::makeFromISCString(drc, iscString.str()));
-     if(!dke->checkKey()) {
-       cerr << "Invalid DNS Private Key in engine " << module << " slot " << slot << std::endl;
-       return 1;
-     }
-     dpk.setKey(dke);
+      shared_ptr<DNSCryptoKeyEngine> dke(DNSCryptoKeyEngine::makeFromISCString(drc, iscString.str()));
+      if(!dke->checkKey()) {
+        cerr << "Invalid DNS Private Key in engine " << module << " slot " << slot << std::endl;
+        return 1;
+      }
+      dpk.setKey(dke);
 
-     // make sure this key isn't being reused.
-     B.getDomainKeys(zone, 0, keys);
-     id = -1;
+      // make sure this key isn't being reused.
+      B.getDomainKeys(zone, 0, keys);
+      id = -1;
 
-     for(DNSBackend::KeyData& kd :  keys) {
-       if (kd.content == iscString.str()) {
-         // it's this one, I guess...
-         id = kd.id;
-         break;
-       }
-     }
+      for(DNSBackend::KeyData& kd :  keys) {
+        if (kd.content == iscString.str()) {
+          // it's this one, I guess...
+          id = kd.id;
+          break;
+        }
+      }
 
-     if (id > -1) {
-       cerr << "You have already assigned this key with ID=" << id << std::endl;
-       return 1;
-     }
+      if (id > -1) {
+        cerr << "You have already assigned this key with ID=" << id << std::endl;
+        return 1;
+      }
 
-     if (!dk.addKey(zone, dpk, id)) {
-       cerr << "Unable to assign module slot to zone" << std::endl;
-       return 1;
-     }
+      if (!dk.addKey(zone, dpk, id)) {
+        cerr << "Unable to assign module slot to zone" << std::endl;
+        return 1;
+      }
 
-     cerr << "Module " << module << " slot " << slot << " assigned to " << zone << " with key id " << id << endl;
+      cerr << "Module " << module << " slot " << slot << " assigned to " << zone << " with key id " << id << endl;
 
-     return 0;
+      return 0;
     } else if (cmds[1] == "create-key") {
 
       if (cmds.size() < 4) {
