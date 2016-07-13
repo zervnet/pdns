@@ -659,7 +659,7 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
   UeberBackend B;
   DNSSECKeeper dk(&B);
 
-  int insertedId;
+  int64_t insertedId;
   if (content.is_null()) {
     int bits = intFromJson(document, "bits", 0);
     int algorithm = 13; // ecdsa256
@@ -674,7 +674,7 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
     }
 
     try{
-      insertedId = dk.addKey(zonename, keyOrZone, algorithm, bits, active);
+      dk.addKey(zonename, keyOrZone, algorithm, insertedId, bits, active);
     }catch (std::runtime_error& error){
       throw ApiException(error.what());
     }
@@ -701,7 +701,7 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
       throw ApiException("Wrong key format!");
     }
     try{
-      insertedId = dk.addKey(zonename, dpk, active);
+      dk.addKey(zonename, dpk,insertedId, active);
     }catch (std::runtime_error& error){
       throw ApiException(error.what());
     }

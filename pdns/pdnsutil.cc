@@ -1679,7 +1679,9 @@ bool secureZone(DNSSECKeeper& dk, const DNSName& zone)
   vector<string> k_algos;
   vector<string> z_algos;
   int k_size;
-  int z_size; 
+  int z_size;
+  //temp var for addKey
+  int64_t id;
 
   stringtok(k_algos, ::arg()["default-ksk-algorithms"], " ,");
   k_size = ::arg().asNum("default-ksk-size");
@@ -1724,13 +1726,12 @@ bool secureZone(DNSSECKeeper& dk, const DNSName& zone)
   if (k_algos.empty()) { /* only a ZSK was requested by the defaults, set the SEP bit */
   }
 
-
   for(auto &k_algo: k_algos) {
     cout << "Adding "<<(z_algos.empty()? "CSK (257)" : "KSK")<<" with algorithm " << k_algo << endl;
 
     int algo = DNSSECKeeper::shorthand2algorithm(k_algo);
 
-    if(dk.addKey(zone, true, algo, k_size, true) < 0) {
+    if(!dk.addKey(zone, true, algo, id, k_size, true)) {
       cerr<<"No backend was able to secure '"<<zone<<"', most likely because no DNSSEC"<<endl;
       cerr<<"capable backends are loaded, or because the backends have DNSSEC disabled."<<endl;
       cerr<<"For the Generic SQL backends, set the 'gsqlite3-dnssec', 'gmysql-dnssec' or"<<endl;
@@ -1745,7 +1746,7 @@ bool secureZone(DNSSECKeeper& dk, const DNSName& zone)
 
     int algo = DNSSECKeeper::shorthand2algorithm(z_algo);
 
-    if(!dk.addKey(zone, false, algo, z_size, true) < 0) {
+    if(!dk.addKey(zone, false, algo, id, z_size, true)) {
       cerr<<"No backend was able to secure '"<<zone<<"', most likely because no DNSSEC"<<endl;
       cerr<<"capable backends are loaded, or because the backends have DNSSEC disabled."<<endl;
       cerr<<"For the Generic SQL backends, set the 'gsqlite3-dnssec', 'gmysql-dnssec' or"<<endl;
@@ -2229,8 +2230,8 @@ loadMainConfig(g_vm["config-dir"].as<string>());
         exit(EXIT_FAILURE);;
       }
     }
-    int id;
-    if((id = dk.addKey(zone, keyOrZone, algorithm, bits, active)) < 0) {
+    int64_t id;
+    if(!dk.addKey(zone, keyOrZone, algorithm, id, bits, active)) {
       cerr<<"Adding key failed, perhaps DNSSEC not enabled in configuration?"<<endl;
       exit(1);
     }
@@ -2238,7 +2239,12 @@ loadMainConfig(g_vm["config-dir"].as<string>());
       cerr<<"Added a " << (keyOrZone ? "KSK" : "ZSK")<<" with algorithm = "<<algorithm<<", active="<<active<<endl;
       if(bits)
         cerr<<"Requested specific key size of "<<bits<<" bits"<<endl;
-      cout<<std::to_string(id)<<endl;
+      if(id < 0){
+        cout<<std::to_string(id)<<" - Key was added, but backend did not return ID (perhaps not supported by backend?)"<<endl;
+      }
+      else {
+        cout<<std::to_string(id)<<endl;
+      }
     }
   }
   else if(cmds[0] == "remove-zone-key") {
@@ -2608,12 +2614,17 @@ loadMainConfig(g_vm["config-dir"].as<string>());
     else
       dpk.d_flags = 257; // ksk
 
-    int id;
-    if((id = dk.addKey(DNSName(zone), dpk)) < 0) {
+    int64_t id;
+    if(!dk.addKey(DNSName(zone), dpk, id)) {
       cerr<<"Adding key failed, perhaps DNSSEC not enabled in configuration?"<<endl;
       exit(1);
     }
-    cout<<std::to_string(id)<<endl;
+    if(id < 0){
+      cout<<std::to_string(id)<<" - Key was added, but backend did not return ID (perhaps not supported by backend?)"<<endl;
+    }
+    else {
+      cout<<std::to_string(id)<<endl;
+    }
     
   }
   else if(cmds[0]=="import-zone-key") {
@@ -2649,12 +2660,17 @@ loadMainConfig(g_vm["config-dir"].as<string>());
         exit(1);
       }          
     }
-    int id;
-    if((id = dk.addKey(DNSName(zone), dpk, active)) < 0) {
+    int64_t id;
+    if(!dk.addKey(DNSName(zone), dpk, id, active)) {
       cerr<<"Adding key failed, perhaps DNSSEC not enabled in configuration?"<<endl;
       exit(1);
     }
-    cout<<std::to_string(id)<<endl;
+    if(id < 0){
+      cout<<std::to_string(id)<<" - Key was added, but backend did not return ID (perhaps not supported by backend?)"<<endl;
+    }
+    else {
+      cout<<std::to_string(id)<<endl;
+    }
   }
   else if(cmds[0]=="export-zone-dnskey") {
     if(cmds.size() < 3) {
@@ -3143,10 +3159,12 @@ loadMainConfig(g_vm["config-dir"].as<string>());
       }
       // move keys
       nk=0;
+      // temp var for KeyID
+      int64_t keyID;
       std::vector<DNSBackend::KeyData> keys;
       if (src->getDomainKeys(di.zone, 0, keys)) {
         for(const DNSBackend::KeyData& k: keys) {
-          tgt->addDomainKey(di.zone, k);
+          tgt->addDomainKey(di.zone, k, keyID);
           nk++;
         }
       }

@@ -646,10 +646,10 @@ bool GSQLBackend::getBeforeAndAfterNamesAbsolute(uint32_t id, const string& qnam
   return true;
 }
 
-int GSQLBackend::addDomainKey(const DNSName& name, const KeyData& key)
+bool GSQLBackend::addDomainKey(const DNSName& name, const KeyData& key, int64_t& id)
 {
   if(!d_dnssecQueries)
-    return -1;
+    return false;
 
   try {
     d_AddDomainKeyQuery_stmt->
@@ -670,15 +670,15 @@ int GSQLBackend::addDomainKey(const DNSName& name, const KeyData& key)
       throw PDNSException("GSQLBackend unable to get id");
     SSqlStatement::row_t row;
     d_GetLastInsertedKeyIdQuery_stmt->nextRow(row);
-    int id = std::stoi(row[0]);
+    id = std::stoi(row[0]);
     d_GetLastInsertedKeyIdQuery_stmt->reset();
-    return id;
+    return true;
   }
   catch (SSqlException &e) {
     throw PDNSException("GSQLBackend unable to get id: "+e.txtReason());
   }
 
-  return -1;
+  return false;
 }
 
 bool GSQLBackend::activateDomainKey(const DNSName& name, unsigned int id)
