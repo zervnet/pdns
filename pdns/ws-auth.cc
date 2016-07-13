@@ -526,8 +526,8 @@ static void updateDomainSettingsFromDocument(const DomainInfo& di, const DNSName
   }
 }
 
-static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpResponse *resp, DNSSECKeeper dk, DomainInfo di) {
-  DNSSECKeeper::keyset_t keyset=dk.getKeys(zonename, false);
+static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpResponse *resp, DNSSECKeeper *dk) {
+  DNSSECKeeper::keyset_t keyset=(*dk).getKeys(zonename, false);
 
   bool inquireSingleKey = inquireKeyId >= 0;
 
@@ -587,8 +587,8 @@ static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpRespons
  * Case 2: the backend returns false on removal. An error occoured.
  *      The sever returns 422 Unprocessable Entity with message "Could not DELETE :cryptokey_id".
  * */
-static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequest *req, HttpResponse *resp, DNSSECKeeper dk, DomainInfo di) {
-  if (dk.removeKey(zonename, inquireKeyId)) {
+static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequest *req, HttpResponse *resp, DNSSECKeeper *dk) {
+  if ((*dk).removeKey(zonename, inquireKeyId)) {
     resp->body = "";
     resp->setSuccessResult("OK", 200);
   } else {
@@ -630,7 +630,7 @@ static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequ
  *    The server returns 201 Created and all public data about the added cryptokey
  */
 
-static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpResponse *resp, DNSSECKeeper dk) {
+static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpResponse *resp, DNSSECKeeper *dk) {
   auto document = req->json();
   auto content = document["content"];
 
@@ -656,12 +656,12 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
         throw ApiException("Unknown algorithm: " + providedAlgo.string_value());
     } else if (providedAlgo.is_number()) {
       algorithm = providedAlgo.int_value();
-    } else if (providedAlgo != NULL) {
+    } else if (!providedAlgo.is_null()) {
       throw ApiException("Unknown algorithm: " + providedAlgo.string_value());
     }
 
     try {
-      insertedId = dk.addKey(zonename, keyOrZone, algorithm, bits, active);
+      insertedId = (*dk).addKey(zonename, keyOrZone, algorithm, bits, active);
     }
     catch (std::runtime_error& error){
       throw ApiException(error.what());
@@ -690,7 +690,7 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
       throw ApiException("Key could not be parsed. Make sure your key format is correct.");
     }
     try {
-      insertedId = dk.addKey(zonename, dpk, active);
+      insertedId = (*dk).addKey(zonename, dpk, active);
     }
     catch (std::runtime_error& error){
       throw ApiException(error.what());
@@ -702,7 +702,7 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
     throw ApiException("Either you submit just the 'content' field or you leave 'content' empty and submit the other fields.");
   }
   resp->setSuccessResult("Created", 201);
-  apiZoneCryptokeysGET(zonename, insertedId, resp);
+  apiZoneCryptokeysGET(zonename, insertedId, resp, dk);
 }
 
 /*
@@ -716,7 +716,7 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
  * Case 3: the backend returns false on de/activation. An error occoured.
  *      The sever returns 422 Unprocessable Entity with message "Could not de/activate Key: :cryptokey_id in Zone: :zone_name"
  * */
-static void apiZoneCryptokeysPUT(DNSName zonename, int inquireKeyId, HttpRequest *req, HttpResponse *resp, DNSSECKeeper dk, DomainInfo di){
+static void apiZoneCryptokeysPUT(DNSName zonename, int inquireKeyId, HttpRequest *req, HttpResponse *resp, DNSSECKeeper *dk){
 
   //throws an exception if the Body is empty
   auto document = req->json();
@@ -724,12 +724,12 @@ static void apiZoneCryptokeysPUT(DNSName zonename, int inquireKeyId, HttpRequest
   bool active = boolFromJson(document, "active");
 
   if (active){
-    if (!dk.activateKey(zonename, inquireKeyId)) { // TODO change to ApiException???
+    if (!(*dk).activateKey(zonename, inquireKeyId)) { // TODO change to ApiException???
       resp->setErrorResult("Could not activate Key: " + req->parameters["key_id"] + " in Zone: " + zonename.toString(), 422);
       return;
     }
   } else {
-    if (!dk.deactivateKey(zonename, inquireKeyId)) {
+    if (!(*dk).deactivateKey(zonename, inquireKeyId)) {
       resp->setErrorResult("Could not deactivate Key: " + req->parameters["key_id"] + " in Zone: " + zonename.toString(), 422);
       return;
     }
@@ -760,17 +760,17 @@ static void apiZoneCryptokeys(HttpRequest *req, HttpResponse *resp) {
   }
 
   if (req->method == "GET") {
-    apiZoneCryptokeysGET(zonename, inquireKeyId, resp, dk, di);
+    apiZoneCryptokeysGET(zonename, inquireKeyId, resp, &dk);
   } else if (req->method == "DELETE") {
     if (inquireKeyId == -1)
       throw HttpBadRequestException();
-    apiZoneCryptokeysDELETE(zonename, inquireKeyId, req, resp, dk, di);
+    apiZoneCryptokeysDELETE(zonename, inquireKeyId, req, resp, &dk);
   } else if (req->method == "POST") {
-    apiZoneCryptokeysPOST(zonename, req, resp, dk);
+    apiZoneCryptokeysPOST(zonename, req, resp, &dk);
   } else if (req->method == "PUT"){
     if (inquireKeyId == -1)
       throw HttpBadRequestException();
-    apiZoneCryptokeysPUT(zonename, inquireKeyId, req, resp, dk, di);
+    apiZoneCryptokeysPUT(zonename, inquireKeyId, req, resp, &dk);
   } else {
     throw HttpMethodNotAllowedException(); //Returns method not allowed
   }

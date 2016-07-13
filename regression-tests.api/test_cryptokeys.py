@@ -46,7 +46,7 @@ class Cryptokeys(ApiTestCase):
 
         #checks for not covered zonename
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"fail/cryptokeys/"+keyid))
-        self.assertEquals(r.status_code, 400)
+        self.assertEquals(r.status_code, 422)
 
         #checks for key is gone. Its ok even if no key had to be deleted. Or something went wrong with the backend.
         r = self.session.delete(self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+keyid))
@@ -178,7 +178,7 @@ class Cryptokeys(ApiTestCase):
             self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+keyid),
             data=json.dumps(payload),
             headers={'content-type': 'application/json'})
-        self.assertEquals(o.status_code, 200)
+        self.assertEquals(o.status_code, 204)
 
         # check if key is activated
         try:
@@ -195,8 +195,8 @@ class Cryptokeys(ApiTestCase):
             self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+keyid),
             data=json.dumps(payload2),
             headers={'content-type': 'application/json'})
-        self.assertEquals(q.status_code, 200)
-        self.assert_success_json(q)
+        self.assertEquals(q.status_code, 204)
+        #self.assert_success_json(q)
 
         # check if key is deactivated
         try:
@@ -227,8 +227,8 @@ class Cryptokeys(ApiTestCase):
             self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+keyid),
             data=json.dumps(payload),
             headers={'content-type': 'application/json'})
-        self.assertEquals(q.status_code, 200)
-        self.assert_success_json(q)
+        self.assertEquals(q.status_code, 204)
+        #self.assert_success_json(q)
 
         # check if key is still deactivated
         try:
@@ -245,7 +245,7 @@ class Cryptokeys(ApiTestCase):
             self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+keyid),
             data=json.dumps(payload2),
             headers={'content-type': 'application/json'})
-        self.assertEquals(o.status_code, 200)
+        self.assertEquals(o.status_code, 204)
 
         # check if key is activated
         try:
@@ -259,7 +259,7 @@ class Cryptokeys(ApiTestCase):
             self.url("/api/v1/servers/localhost/zones/"+Cryptokeys.zone+"/cryptokeys/"+keyid),
             data=json.dumps(payload2),
             headers={'content-type': 'application/json'})
-        self.assertEquals(z.status_code, 200)
+        self.assertEquals(z.status_code, 204)
 
         # check if key is still activated
         try:
