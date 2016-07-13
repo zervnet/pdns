@@ -2966,7 +2966,7 @@ loadMainConfig(g_vm["config-dir"].as<string>());
         return 1;
       }
 
-      int id;
+      int64_t id;
       bool keyOrZone = (cmds[4] == "ksk" ? true : false);
       string module = cmds[5];
       string slot = cmds[6];
@@ -3009,22 +3009,9 @@ loadMainConfig(g_vm["config-dir"].as<string>());
        return 1;
      }
 
-     if (!(id = dk.addKey(zone, dpk))) {
+     if (!dk.addKey(zone, dpk, id)) {
        cerr << "Unable to assign module slot to zone" << std::endl;
        return 1;
-     }
-
-     // figure out key id.
-
-     B.getDomainKeys(zone, 0, keys);
-
-     // validate which one got the key...
-     for(DNSBackend::KeyData& kd :  keys) {
-       if (kd.content == iscString.str()) {
-         // it's this one, I guess...
-         id = kd.id;
-         break;
-       }
      }
 
      cerr << "Module " << module << " slot " << slot << " assigned to " << zone << " with key id " << id << endl;
