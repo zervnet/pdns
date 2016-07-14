@@ -687,13 +687,13 @@ This method adds a new key to a zone. The key can either be generated or importe
 
 * `content` : "\<key\>" `<string>` (The format used is compatible with BIND and NSD/LDNS)
 * `keytype` : "ksk|zsk" `<string>`
-* `active`: "true|false" `<value>`
+* `active`: "true|false" `<value>` (If not set the key will not be active by default)
 
 If `content` == `null`, the server generates a new key. In this case, the
 following additional fields MAY be supplied:
 
 * `bits`: number of bits `<int>`
-* `algo`: `<algo>`
+* `algo`: `<algo>` (Default: 13/ECDSA)
 
 Where `<algo>` is one of the supported key algorithms in lowercase OR the
 numeric id, see [`the list`](../authoritative/dnssec.md#supported-algorithms).
@@ -705,15 +705,17 @@ numeric id, see [`the list`](../authoritative/dnssec.md#supported-algorithms).
     * The "algo" is not supported:
         * `{"error" : "Unknown algorithm: 'algo'"}`
     * Algo <= 10 and the `bits` parameter is not set:
-        * `{"error" : "Creating an algorithm 'algo' key requires the size (in bits) to be passed"}`
+        * `{"error" : "Creating an algorithm 'algo' key requires the size (in bits) to be passed."}`
     * The provided bit size is not supported by the selected algorithm:
-        * `{"error" : "Wrong bit size"}`
+        * `{"error" : "The algorithm does not support the given bit size."}`
+    * The `bits` parameter is not a positive integer value:
+        * `{"error" : "'bits' must be a positive integer value"}`
     * If the server can not guess the key size:
         * `{"error" : "Can not guess key size for algorithm"}`
     * The key-creation failed:
         * `{"error" : "Adding key failed, perhaps DNSSEC not enabled in configuration?"}`
     * The key in `content` has the wrong format:
-        * `{"error" : "Wrong key format"}`
+        * `{"error" : "Key could not be parsed. Make sure your key format is correct."}`
 * `201 Created`:
     * Everything was fine:
         * Returns all public data about the new cryptokey. Look at cryptokey\_resource.
