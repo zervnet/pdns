@@ -590,7 +590,7 @@ static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpRespons
 static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequest *req, HttpResponse *resp, DNSSECKeeper *dk) {
   if ((*dk).removeKey(zonename, inquireKeyId)) {
     resp->body = "";
-    resp->setSuccessResult("OK", 200);
+    resp->status = 200;
   } else {
     resp->setErrorResult("Could not DELETE " + req->parameters["key_id"], 422);
   }
