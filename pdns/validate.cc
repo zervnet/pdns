@@ -388,8 +388,12 @@ vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
               if(nsec) {
                 if(v.first.first == qname && !nsec->d_set.count(QType::DS))
                   return Insecure;
+                else if(v.first.first.canonCompare(qname) && qname.canonCompare(nsec->d_next) ) {
+                  LOG("Did not find DS for this level, trying one lower"<<endl);
+                  goto skipLevel;
+                }
                 else {
-                  LOG("Did not deny existence of DS, "<<v.first.first<<"?="<<qname<<", "<<nsec->d_set.count(QType::DS)<<endl);
+                  LOG("Did not deny existence of DS, "<<v.first.first<<"?="<<qname<<", "<<nsec->d_set.count(QType::DS)<<", next: "<<nsec->d_next<<endl);
                 }
               }
             }
@@ -401,9 +405,14 @@ vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
 
               auto nsec3 = std::dynamic_pointer_cast<NSEC3RecordContent>(r);
               string h = hashQNameWithSalt(nsec3->d_salt, nsec3->d_iterations, qname);
+              //              cerr<<"Salt length: "<<nsec3->d_salt.length()<<", iterations: "<<nsec3->d_iterations<<", hashed: "<<qname<<endl;
               LOG("\tquery hash: "<<toBase32Hex(h)<<endl);
               string beginHash=fromBase32Hex(v.first.first.getRawLabels()[0]);
-              if(beginHash < h && h < nsec3->d_nexthash) {
+              if( (beginHash < h && h < nsec3->d_nexthash) ||
+                  (nsec3->d_nexthash > h  && beginHash > nsec3->d_nexthash) ||  // wrap // HASH --- END --- BEGINNING
+                  (nsec3->d_nexthash < beginHash  && beginHash < h) ||  // wrap other case // END -- BEGINNING -- HASH
+                  beginHash == nsec3->d_nexthash)  // "we have only 1 NSEC3 record, LOL!"  
+              {
                 LOG("Denies existence of DS!"<<endl);
                 return Insecure;
               }
@@ -437,6 +446,7 @@ vState getKeysFor(DNSRecordOracle& dro, const DNSName& zone, keyset_t &keyset)
         dState dres = getDenial(validrrsets, qname, QType::DS);
         if(dres == INSECURE) return Insecure;
       }
+    skipLevel:;
     } while(!dsmap.size() && labels.size());
 
     // break;

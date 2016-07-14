@@ -84,11 +84,7 @@ extern SortList g_sortlist;
 #include "ednsoptions.hh"
 #include "gettime.hh"
 
-#ifdef HAVE_PROTOBUF
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include "dnsmessage.pb.h"
-#endif
+#include "rec-protobuf.hh"
 
 #ifdef HAVE_SYSTEMD
 #include <systemd/sd-daemon.h>
@@ -607,7 +603,7 @@ void updateResponseStats(int res, const ComboAddress& remote, unsigned int packe
 static string makeLoginfo(DNSComboWriter* dc)
 try
 {
-  return "("+dc->d_mdp.d_qname.toString()+"/"+DNSRecordContent::NumberToType(dc->d_mdp.d_qtype)+" from "+(dc->d_remote.toString())+")";
+  return "("+dc->d_mdp.d_qname.toLogString()+"/"+DNSRecordContent::NumberToType(dc->d_mdp.d_qtype)+" from "+(dc->d_remote.toString())+")";
 }
 catch(...)
 {
@@ -615,96 +611,31 @@ catch(...)
 }
 
 #ifdef HAVE_PROTOBUF
-static void protobufUpdateMessage(PBDNSMessage& message, const boost::uuids::uuid& uniqueId, const ComboAddress& remote, const ComboAddress& local, const Netmask& ednssubnet, bool tcp, uint16_t id)
+static void protobufLogQuery(const std::shared_ptr<RemoteLogger>& logger, uint8_t maskV4, uint8_t maskV6, const boost::uuids::uuid& uniqueId, const ComboAddress& remote, const ComboAddress& local, const Netmask& ednssubnet, bool tcp, uint16_t id, size_t len, const DNSName& qname, uint16_t qtype, uint16_t qclass, const std::string appliedPolicy, const std::vector<std::string>& policyTags)
 {
-  std::string* messageId = message.mutable_messageid();
-  messageId->resize(uniqueId.size());
-  std::copy(uniqueId.begin(), uniqueId.end(), messageId->begin());
+  Netmask requestorNM(remote, remote.sin4.sin_family == AF_INET ? maskV4 : maskV6);
+  const ComboAddress& requestor = requestorNM.getMaskedNetwork();
+  RecProtoBufMessage message(DNSProtoBufMessage::Query, uniqueId, &requestor, &local, qname, qtype, qclass, id, tcp, len);
+  message.setEDNSSubnet(ednssubnet);
 
-  message.set_socketfamily(remote.sin4.sin_family == AF_INET ? PBDNSMessage_SocketFamily_INET : PBDNSMessage_SocketFamily_INET6);
-  message.set_socketprotocol(tcp ? PBDNSMessage_SocketProtocol_TCP : PBDNSMessage_SocketProtocol_UDP);
-
-  if (local.sin4.sin_family == AF_INET) {
-    message.set_to(&local.sin4.sin_addr.s_addr, sizeof(local.sin4.sin_addr.s_addr));
-  }
-  else if (local.sin4.sin_family == AF_INET6) {
-    message.set_to(&local.sin6.sin6_addr.s6_addr, sizeof(local.sin6.sin6_addr.s6_addr));
-  }
-  if (remote.sin4.sin_family == AF_INET) {
-    message.set_from(&remote.sin4.sin_addr.s_addr, sizeof(remote.sin4.sin_addr.s_addr));
-  }
-  else if (remote.sin4.sin_family == AF_INET6) {
-    message.set_from(&remote.sin6.sin6_addr.s6_addr, sizeof(remote.sin6.sin6_addr.s6_addr));
-  }
-  if (!ednssubnet.empty()) {
-    const ComboAddress ca = ednssubnet.getNetwork();
-    if (ca.sin4.sin_family == AF_INET) {
-      message.set_originalrequestorsubnet(&ca.sin4.sin_addr.s_addr, sizeof(ca.sin4.sin_addr.s_addr));
-    }
-    else if (ca.sin4.sin_family == AF_INET6) {
-      message.set_originalrequestorsubnet(&ca.sin6.sin6_addr.s6_addr, sizeof(ca.sin6.sin6_addr.s6_addr));
-    }
-  }
-
-  struct timespec ts;
-  gettime(&ts, true);
-  message.set_timesec(ts.tv_sec);
-  message.set_timeusec(ts.tv_nsec / 1000);
-
-  message.set_id(ntohs(id));
-}
-
-static void protobufFillMessage(PBDNSMessage& message, const boost::uuids::uuid& uniqueId, const ComboAddress& remote, const ComboAddress& local, const Netmask& ednssubnet, bool tcp, uint16_t id, const DNSName& qname, uint16_t qtype, uint16_t qclass)
-{
-  protobufUpdateMessage(message, uniqueId, remote, local, ednssubnet, tcp, id);
-
-  PBDNSMessage_DNSQuestion* question = message.mutable_question();
-  question->set_qname(qname.toString());
-  question->set_qtype(qtype);
-  question->set_qclass(qclass);
-}
-
-static void protobufFillMessageFromDC(PBDNSMessage& message, const DNSComboWriter* dc)
-{
-  protobufFillMessage(message, dc->d_uuid, dc->d_remote, dc->d_local, dc->d_ednssubnet, dc->d_tcp, dc->d_mdp.d_header.id, dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_mdp.d_qclass);
-}
-
-static void protobufLogQuery(const std::shared_ptr<RemoteLogger>& logger, const boost::uuids::uuid& uniqueId, const ComboAddress& remote, const ComboAddress& local, const Netmask& ednssubnet, bool tcp, uint16_t id, size_t len, const DNSName& qname, uint16_t qtype, uint16_t qclass, const std::string appliedPolicy, const std::vector<std::string>& policyTags)
-{
-  PBDNSMessage message;
-  message.set_type(PBDNSMessage_Type_DNSQueryType);
-  message.set_inbytes(len);
-  protobufFillMessage(message, uniqueId, remote, local, ednssubnet, tcp, id, qname, qtype, qclass);
-
-  /* just fake it up for now */
-  PBDNSMessage_DNSResponse* response = message.mutable_response();
   if (!appliedPolicy.empty()) {
-    response->set_appliedpolicy(appliedPolicy);
+    message.setAppliedPolicy(appliedPolicy);
   }
   if (!policyTags.empty()) {
-    for(const auto tag : policyTags) {
-      response->add_tags(tag);
-    }
+    message.setPolicyTags(policyTags);
   }
 
-//  cerr <<message.DebugString()<<endl;
+//  cerr <<message.toDebugString()<<endl;
   std::string str;
-  message.SerializeToString(&str);
+  message.serialize(str);
   logger->queueData(str);
 }
 
-static void protobufFillResponseFromDC(PBDNSMessage& message, const DNSComboWriter* dc, size_t responseSize)
+static void protobufLogResponse(const std::shared_ptr<RemoteLogger>& logger, const RecProtoBufMessage& message)
 {
-  message.set_type(PBDNSMessage_Type_DNSResponseType);
-  message.set_inbytes(responseSize);
-  protobufFillMessageFromDC(message, dc);
-}
-
-static void protobufLogResponse(const std::shared_ptr<RemoteLogger>& logger, const PBDNSMessage& message)
-{
-//  cerr <<message.DebugString()<<endl;
+//  cerr <<message.toDebugString()<<endl;
   std::string str;
-  message.SerializeToString(&str);
+  message.serialize(str);
   logger->queueData(str);
 }
 #endif
@@ -729,10 +660,16 @@ void startDoResolve(void *p)
 
     auto luaconfsLocal = g_luaconfs.getLocal();
     std::string appliedPolicy;
+    RecProtoBufMessage pbMessage(RecProtoBufMessage::Response);
 #ifdef HAVE_PROTOBUF
-    PBDNSMessage pbMessage;
-    PBDNSMessage_DNSResponse* protobufResponse = pbMessage.mutable_response();
-#endif
+    if (luaconfsLocal->protobufServer) {
+      Netmask requestorNM(dc->d_remote, dc->d_remote.sin4.sin_family == AF_INET ? luaconfsLocal->protobufMaskV4 : luaconfsLocal->protobufMaskV6);
+      const ComboAddress& requestor = requestorNM.getMaskedNetwork();
+      pbMessage.update(dc->d_uuid, &requestor, &dc->d_local, dc->d_tcp, dc->d_mdp.d_header.id);
+      pbMessage.setEDNSSubnet(dc->d_ednssubnet);
+      pbMessage.setQuestion(dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_mdp.d_qclass);
+    }
+#endif /* HAVE_PROTOBUF */
 
     DNSPacketWriter pw(packet, dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_mdp.d_qclass);
 
@@ -952,45 +889,53 @@ void startDoResolve(void *p)
 
       // Does the validation mode or query demand validation?
       if(g_dnssecmode == DNSSECMode::ValidateAll || g_dnssecmode==DNSSECMode::ValidateForLog || (dc->d_mdp.d_header.ad && g_dnssecmode==DNSSECMode::Process)) {
-        if(sr.doLog()) {
-          L<<Logger::Warning<<"Starting validation of answer to "<<dc->d_mdp.d_qname<<" for "<<dc->d_remote.toStringWithPort()<<endl;
-        }
-
-        auto state=validateRecords(ret);
-        if(state == Secure) {
+        try {
           if(sr.doLog()) {
-            L<<Logger::Warning<<"Answer to "<<dc->d_mdp.d_qname<<" for "<<dc->d_remote.toStringWithPort()<<" validates correctly"<<endl;
+            L<<Logger::Warning<<"Starting validation of answer to "<<dc->d_mdp.d_qname<<" for "<<dc->d_remote.toStringWithPort()<<endl;
           }
-
-          // Is the query source interested in the value of the ad-bit?
-          if (dc->d_mdp.d_header.ad)
-            pw.getHeader()->ad=1;
-        }
-        else if(state == Insecure) {
-          if(sr.doLog()) {
-            L<<Logger::Warning<<"Answer to "<<dc->d_mdp.d_qname<<" for "<<dc->d_remote.toStringWithPort()<<" validates as Insecure"<<endl;
-          }
-
-          pw.getHeader()->ad=0;
-        }
-        else if(state == Bogus) {
-          if(sr.doLog() || g_dnssecmode == DNSSECMode::ValidateForLog) {
-            L<<Logger::Warning<<"Answer to "<<dc->d_mdp.d_qname<<" for "<<dc->d_remote.toStringWithPort()<<" validates as Bogus"<<endl;
-          }
-
-          // Does the query or validation mode sending out a SERVFAIL on validation errors?
-          if(!pw.getHeader()->cd && (g_dnssecmode == DNSSECMode::ValidateAll || dc->d_mdp.d_header.ad)) {
+          
+          auto state=validateRecords(ret);
+          if(state == Secure) {
             if(sr.doLog()) {
-              L<<Logger::Warning<<"Sending out SERVFAIL for "<<dc->d_mdp.d_qname<<" because recursor or query demands it for Bogus results"<<endl;
+              L<<Logger::Warning<<"Answer to "<<dc->d_mdp.d_qname<<" for "<<dc->d_remote.toStringWithPort()<<" validates correctly"<<endl;
             }
-
-            pw.getHeader()->rcode=RCode::ServFail;
-            goto sendit;
-          } else {
+            
+            // Is the query source interested in the value of the ad-bit?
+            if (dc->d_mdp.d_header.ad)
+              pw.getHeader()->ad=1;
+          }
+          else if(state == Insecure) {
             if(sr.doLog()) {
-              L<<Logger::Warning<<"Not sending out SERVFAIL for "<<dc->d_mdp.d_qname<<" Bogus validation since neither config nor query demands this"<<endl;
+              L<<Logger::Warning<<"Answer to "<<dc->d_mdp.d_qname<<" for "<<dc->d_remote.toStringWithPort()<<" validates as Insecure"<<endl;
+            }
+            
+            pw.getHeader()->ad=0;
+          }
+          else if(state == Bogus) {
+            if(sr.doLog() || g_dnssecmode == DNSSECMode::ValidateForLog) {
+              L<<Logger::Warning<<"Answer to "<<dc->d_mdp.d_qname<<" for "<<dc->d_remote.toStringWithPort()<<" validates as Bogus"<<endl;
+            }
+            
+            // Does the query or validation mode sending out a SERVFAIL on validation errors?
+            if(!pw.getHeader()->cd && (g_dnssecmode == DNSSECMode::ValidateAll || dc->d_mdp.d_header.ad)) {
+              if(sr.doLog()) {
+                L<<Logger::Warning<<"Sending out SERVFAIL for "<<dc->d_mdp.d_qname<<" because recursor or query demands it for Bogus results"<<endl;
+              }
+              
+              pw.getHeader()->rcode=RCode::ServFail;
+              goto sendit;
+            } else {
+              if(sr.doLog()) {
+                L<<Logger::Warning<<"Not sending out SERVFAIL for "<<dc->d_mdp.d_qname<<" Bogus validation since neither config nor query demands this"<<endl;
+              }
             }
           }
+        }
+        catch(ImmediateServFailException &e) {
+          if(g_logCommonErrors)
+            L<<Logger::Notice<<"Sending SERVFAIL to "<<dc->getRemote()<<" during validation of '"<<dc->d_mdp.d_qname<<"' because: "<<e.reason<<endl;
+          pw.getHeader()->rcode=RCode::ServFail;
+          goto sendit;
         }
       }
 
@@ -1022,24 +967,8 @@ void startDoResolve(void *p)
 	  goto sendit; // need to jump over pw.commit
 	}
 #ifdef HAVE_PROTOBUF
-        if(luaconfsLocal->protobufServer && protobufResponse && (i->d_type == QType::A || i->d_type == QType::AAAA)) {
-          PBDNSMessage_DNSResponse_DNSRR* pbRR = protobufResponse->add_rrs();
-          if(pbRR) {
-            pbRR->set_name(i->d_name.toString());
-            pbRR->set_type(i->d_type);
-            pbRR->set_class_(i->d_class);
-            pbRR->set_ttl(i->d_ttl);
-            if (i->d_type == QType::A) {
-              const ARecordContent& arc = dynamic_cast<const ARecordContent&>(*(i->d_content));
-              ComboAddress data = arc.getCA();
-              pbRR->set_rdata(&data.sin4.sin_addr.s_addr, sizeof(data.sin4.sin_addr.s_addr));
-            }
-            else if (i->d_type == QType::AAAA) {
-              const AAAARecordContent& arc = dynamic_cast<const AAAARecordContent&>(*(i->d_content));
-              ComboAddress data = arc.getCA();
-              pbRR->set_rdata(&data.sin6.sin6_addr.s6_addr, sizeof(data.sin6.sin6_addr.s6_addr));
-            }
-          }
+        if(luaconfsLocal->protobufServer && (i->d_type == QType::A || i->d_type == QType::AAAA || i->d_type == QType::CNAME)) {
+          pbMessage.addRR(*i);
         }
 #endif
       }
@@ -1052,18 +981,10 @@ void startDoResolve(void *p)
     updateResponseStats(res, dc->d_remote, packet.size(), &dc->d_mdp.d_qname, dc->d_mdp.d_qtype);
 #ifdef HAVE_PROTOBUF
     if (luaconfsLocal->protobufServer) {
-      if (protobufResponse) {
-        protobufResponse->set_rcode(pw.getHeader()->rcode);
-        if (!appliedPolicy.empty()) {
-          protobufResponse->set_appliedpolicy(appliedPolicy);
-        }
-        if (!dc->d_policyTags.empty()) {
-          for(const auto tag : dc->d_policyTags) {
-            protobufResponse->add_tags(tag);
-          }
-        }
-      }
-      protobufFillResponseFromDC(pbMessage, dc, packet.size());
+      pbMessage.setBytes(packet.size());
+      pbMessage.setResponseCode(pw.getHeader()->rcode);
+      pbMessage.setAppliedPolicy(appliedPolicy);
+      pbMessage.setPolicyTags(dc->d_policyTags);
       protobufLogResponse(luaconfsLocal->protobufServer, pbMessage);
     }
 #endif
@@ -1080,25 +1001,12 @@ void startDoResolve(void *p)
       if(sendmsg(dc->d_socket, &msgh, 0) < 0 && g_logCommonErrors) 
         L<<Logger::Warning<<"Sending UDP reply to client "<<dc->d_remote.toStringWithPort()<<" failed with: "<<strerror(errno)<<endl;
       if(!SyncRes::s_nopacketcache && !variableAnswer && !sr.wasVariable() ) {
-#ifdef HAVE_PROTOBUF
-        if (luaconfsLocal->protobufServer) {
-          t_packetCache->insertResponsePacket(dc->d_tag, dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_query,
-                                              string((const char*)&*packet.begin(), packet.size()),
-                                              g_now.tv_sec,
-                                              pw.getHeader()->rcode == RCode::ServFail ? SyncRes::s_packetcacheservfailttl :
-                                              min(minTTL,SyncRes::s_packetcachettl),
-                                              &pbMessage);
-        }
-        else {
-#endif
-        t_packetCache->insertResponsePacket(dc->d_tag, dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_query, 
+        t_packetCache->insertResponsePacket(dc->d_tag, dc->d_mdp.d_qname, dc->d_mdp.d_qtype, dc->d_query,
                                             string((const char*)&*packet.begin(), packet.size()),
                                             g_now.tv_sec,
                                             pw.getHeader()->rcode == RCode::ServFail ? SyncRes::s_packetcacheservfailttl :
-                                            min(minTTL,SyncRes::s_packetcachettl));
-#ifdef HAVE_PROTOBUF
-        }
-#endif
+                                            min(minTTL,SyncRes::s_packetcachettl),
+                                            &pbMessage);
       }
       //      else cerr<<"Not putting in packet cache: "<<sr.wasVariable()<<endl;
     }
@@ -1321,7 +1229,7 @@ void handleRunningTCPQuestion(int fd, FDMultiplexer::funcparam_t& var)
           getQNameAndSubnet(std::string(conn->data, conn->qlen), &qname, &qtype, &qclass, &ednssubnet);
           dc->d_ednssubnet = ednssubnet;
 
-          protobufLogQuery(luaconfsLocal->protobufServer, dc->d_uuid, dest, conn->d_remote, ednssubnet, true, dh->id, conn->qlen, qname, qtype, qclass, std::string(), std::vector<std::string>());
+          protobufLogQuery(luaconfsLocal->protobufServer, luaconfsLocal->protobufMaskV4, luaconfsLocal->protobufMaskV6, dc->d_uuid, dest, conn->d_remote, ednssubnet, true, dh->id, conn->qlen, qname, qtype, qclass, std::string(), std::vector<std::string>());
         }
         catch(std::exception& e) {
           if(g_logCommonErrors)
@@ -1414,7 +1322,6 @@ string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fr
   std::vector<std::string> policyTags;
 #ifdef HAVE_PROTOBUF
   boost::uuids::uuid uniqueId;
-  PBDNSMessage pbMessage;
   auto luaconfsLocal = g_luaconfs.getLocal();
   if (luaconfsLocal->protobufServer) {
     needECS = true;
@@ -1461,23 +1368,24 @@ string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fr
     }
 
     bool cacheHit = false;
+    RecProtoBufMessage pbMessage(DNSProtoBufMessage::DNSProtoBufMessageType::Response);
 #ifdef HAVE_PROTOBUF
     if(luaconfsLocal->protobufServer) {
-      protobufLogQuery(luaconfsLocal->protobufServer, uniqueId, fromaddr, destaddr, ednssubnet, false, dh->id, question.size(), qname, qtype, qclass, std::string(), policyTags);
+      protobufLogQuery(luaconfsLocal->protobufServer, luaconfsLocal->protobufMaskV4, luaconfsLocal->protobufMaskV6, uniqueId, fromaddr, destaddr, ednssubnet, false, dh->id, question.size(), qname, qtype, qclass, std::string(), policyTags);
+    }
+#endif /* HAVE_PROTOBUF */
 
-      cacheHit = (!SyncRes::s_nopacketcache && t_packetCache->getResponsePacket(ctag, question, g_now.tv_sec, &response, &age, &pbMessage));
-      if (cacheHit) {
-        protobufUpdateMessage(pbMessage, uniqueId, fromaddr, destaddr, ednssubnet, false, dh->id);
+    cacheHit = (!SyncRes::s_nopacketcache && t_packetCache->getResponsePacket(ctag, question, g_now.tv_sec, &response, &age, &pbMessage));
+    if (cacheHit) {
+#ifdef HAVE_PROTOBUF
+      if(luaconfsLocal->protobufServer) {
+        Netmask requestorNM(fromaddr, fromaddr.sin4.sin_family == AF_INET ? luaconfsLocal->protobufMaskV4 : luaconfsLocal->protobufMaskV6);
+        const ComboAddress& requestor = requestorNM.getMaskedNetwork();
+        pbMessage.update(uniqueId, &requestor, &destaddr, false, dh->id);
+        pbMessage.setEDNSSubnet(ednssubnet);
         protobufLogResponse(luaconfsLocal->protobufServer, pbMessage);
       }
-    }
-    else {
-#endif
-    cacheHit = (!SyncRes::s_nopacketcache && t_packetCache->getResponsePacket(ctag, question, g_now.tv_sec, &response, &age));
-#ifdef HAVE_PROTOBUF
-    }
-#endif
-    if (cacheHit) {
+#endif /* HAVE_PROTOBUF */
       if(!g_quiet)
         L<<Logger::Notice<<t_id<< " question answered from packet cache tag="<<ctag<<" from "<<fromaddr.toString()<<endl;
 
@@ -1536,7 +1444,9 @@ string* doProcessUDPQuestion(const std::string& question, const ComboAddress& fr
   dc->d_tcp=false;
   dc->d_policyTags = policyTags;
 #ifdef HAVE_PROTOBUF
-  dc->d_uuid = uniqueId;
+  if (luaconfsLocal->protobufServer) {
+    dc->d_uuid = uniqueId;
+  }
   dc->d_ednssubnet = ednssubnet;
 #endif
 
@@ -2952,7 +2862,7 @@ int main(int argc, char **argv)
     ::arg().set("setuid","If set, change user id to this uid for more security")="";
     ::arg().set("network-timeout", "Wait this nummer of milliseconds for network i/o")="1500";
     ::arg().set("threads", "Launch this number of threads")="2";
-    ::arg().set("processes", "Launch this number of processes (EXPERIMENTAL, DO NOT CHANGE)")="1";
+    ::arg().set("processes", "Launch this number of processes (EXPERIMENTAL, DO NOT CHANGE)")="1"; // if we un-experimental this, need to fix openssl rand seeding for multiple PIDs!
     ::arg().set("config-name","Name of this virtual configuration - will rename the binary image")="";
     ::arg().set("api-config-dir", "Directory where REST API stores config and zones") = "";
     ::arg().set("api-key", "Static pre-shared authentication key for access to the REST API") = "";

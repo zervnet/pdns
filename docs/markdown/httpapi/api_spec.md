@@ -700,7 +700,7 @@ numeric id, see [`the list`](../authoritative/dnssec.md#supported-algorithms).
 
 ##### Response:
 * `422 Unprocessable Entity`:
-    * keytype isn't ksk|zsk: 
+    * keytype isn't ksk|zsk:
         * `json` {"error" : "Invalid keytype 'keytype'"}
     * The "algo" isn't supported:
         * `json` {"error" : "Unknown algorithm: 'algo'"}

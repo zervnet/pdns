@@ -104,6 +104,7 @@ PipeBackend::PipeBackend(const string &suffix)
    }
    catch(const ArgException &A) {
       L<<Logger::Error<<kBackendId<<" Unable to launch, fatal argument error: "<<A.reason<<endl;
+      throw;
    }
    catch(...) {
       throw;
@@ -144,7 +145,7 @@ void PipeBackend::lookup(const QType& qtype,const DNSName& qname, DNSPacket *pkt
   try {
     launch();
     d_disavow=false;
-    if(d_regex && !d_regex->match(qname.toStringNoDot())) {
+    if(d_regex && !d_regex->match(qname.toStringRootDot())) {
       if(::arg().mustDo("query-logging"))
         L<<Logger::Error<<"Query for '"<<qname<<"' failed regex '"<<d_regexstr<<"'"<<endl;
       d_disavow=true; // don't pass to backend
@@ -160,7 +161,7 @@ void PipeBackend::lookup(const QType& qtype,const DNSName& qname, DNSPacket *pkt
       }
       // abi-version = 1
       // type    qname           qclass  qtype   id      remote-ip-address
-      query<<"Q\t"<<qname.toStringNoDot()<<"\tIN\t"<<qtype.getName()<<"\t"<<zoneId<<"\t"<<remoteIP;
+      query<<"Q\t"<<qname.toStringRootDot()<<"\tIN\t"<<qtype.getName()<<"\t"<<zoneId<<"\t"<<remoteIP;
 
       // add the local-ip-address if abi-version is set to 2
       if (d_abiVersion >= 2)
@@ -191,7 +192,7 @@ bool PipeBackend::list(const DNSName& target, int inZoneId, bool include_disable
 
     // type    qname           qclass  qtype   id      ip-address
     if (d_abiVersion >= 4)
-      query<<"AXFR\t"<<inZoneId<<"\t"<<target.toStringNoDot();
+      query<<"AXFR\t"<<inZoneId<<"\t"<<target.toStringRootDot();
     else
       query<<"AXFR\t"<<inZoneId;
 

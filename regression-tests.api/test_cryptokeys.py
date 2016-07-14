@@ -134,13 +134,29 @@ class Cryptokeys(ApiTestCase):
         r = self.add_key(content="trollololoooolll")
         self.assert_error_json(r)
         self.assertEquals(r.status_code, 422)
-        self.assertIn("Wrong key format!",r.json()['error'])
+        self.assertIn("Key could not be parsed. Make sure your key format is correct.",r.json()['error'])
 
     def test_post_wrong_keytype(self):
         r = self.add_key(type='sdfdhhgj')
         self.assert_error_json(r)
         self.assertEquals(r.status_code, 422)
         self.assertIn("Invalid keytype",r.json()['error'])
+
+    def test_post_wrong_bits_format(self):
+        r = self.add_key(bits='sdfdhhgj')
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code, 422)
+        self.assertIn("'bits' must be a positive integer value",r.json()['error'])
+
+        r = self.add_key(bits='5.5')
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code, 422)
+        self.assertIn("'bits' must be a positive integer value",r.json()['error'])
+
+        r = self.add_key(bits='-6')
+        self.assert_error_json(r)
+        self.assertEquals(r.status_code, 422)
+        self.assertIn("'bits' must be a positive integer value",r.json()['error'])
 
     def test_post_unsupported_algorithm(self):
         r = self.add_key(algo='lkjhgf')
@@ -158,13 +174,13 @@ class Cryptokeys(ApiTestCase):
         r = self.add_key(algo=10, bits=30)
         self.assert_error_json(r)
         self.assertEquals(r.status_code,422)
-        self.assertIn("Wrong bit size!", r.json()['error'])
+        self.assertIn("The algorithm does not support the given bit size.", r.json()['error'])
 
     def test_post_can_not_guess_key_size(self):
         r = self.add_key(algo=15)
         self.assert_error_json(r)
         self.assertEquals(r.status_code,422)
-        self.assertIn("Can't guess key size for algorithm", r.json()['error'])
+        self.assertIn("Can not guess key size for algorithm", r.json()['error'])
 
     def test_put_activate_key(self):
         self.keyid = self.add_zone_key()
@@ -188,7 +204,6 @@ class Cryptokeys(ApiTestCase):
 
     def test_put_deactivate_key(self):
         self.keyid= self.add_zone_key(status='active')
-
         # deactivate key
         payload2 = {
             'active': False

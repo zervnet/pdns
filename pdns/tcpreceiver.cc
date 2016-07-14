@@ -843,7 +843,7 @@ int TCPNameserver::doAXFR(const DNSName &target, shared_ptr<DNSPacket> q, int ou
       }
     }
 
-    DLOG(for(const auto &rr: rrs) cerr<<rr.qname.toString()<<"\t"<<rr.qtype.getName()<<"\t"<<rr.auth<<endl;);
+    DLOG(for(const auto &rr: rrs) cerr<<rr.qname<<"\t"<<rr.qtype.getName()<<"\t"<<rr.auth<<endl;);
   }
 
 
@@ -1299,6 +1299,7 @@ void TCPNameserver::thread()
             if(pthread_create(&tid, 0, &doConnection, reinterpret_cast<void*>(fd))) {
               L<<Logger::Error<<"Error creating thread: "<<stringerror()<<endl;
               d_connectionroom_sem->post();
+              close(fd);
             }
           }
         }

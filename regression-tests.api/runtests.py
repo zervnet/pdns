@@ -146,6 +146,7 @@ test_env.update({'WEBPORT': WEBPORT, 'APIKEY': APIKEY, 'DAEMON': daemon, 'SQLITE
 try:
     print ""
     p = subprocess.check_call(["nosetests", "--with-xunit"] + tests, env=test_env)
+    #p = subprocess.check_call(["nosetests", "--with-xunit", "test_cryptokeys.py"], env=test_env)
 except subprocess.CalledProcessError as ex:
     rc = ex.returncode
 finally:
