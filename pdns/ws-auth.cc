@@ -545,17 +545,17 @@ static void apiZoneCryptokeysGET(DNSName zonename, int inquireKeyId, HttpRespons
     }
 
     Json::object key {
-        { "type", "Cryptokey" },
-        { "id", (int)value.second.id },
-        { "active", value.second.active },
-        { "keytype", keyType },
-        { "flags", (uint16_t)value.first.d_flags },
-        { "dnskey", value.first.getDNSKEY().getZoneRepresentation() }
+      { "type", "Cryptokey" },
+      { "id", (int)value.second.id },
+      { "active", value.second.active },
+      { "keytype", keyType },
+      { "flags", (uint16_t)value.first.d_flags },
+      { "dnskey", value.first.getDNSKEY().getZoneRepresentation() }
     };
 
     if (value.second.keyType == DNSSECKeeper::KSK || value.second.keyType == DNSSECKeeper::CSK) {
       Json::array dses;
-      for(const int keyid : { 1, 2, 3, 4 })
+      for (const int keyid : { 1, 2, 3, 4 })
         try {
           dses.push_back(makeDSFromDNSKey(zonename, value.first.getDNSKEY(), keyid).getZoneRepresentation());
         } catch (...) {}

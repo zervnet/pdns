@@ -329,7 +329,7 @@ int Bind2Backend::addDomainKey(const DNSName& name, const KeyData& key)
   try {
     d_GetLastInsertedKeyIdQuery_stmt->execute();
     if (!d_GetLastInsertedKeyIdQuery_stmt->hasNextRow())
-      throw PDNSException("GSQLBackend unable to get id");
+      throw PDNSException("GSQLBackend unable to get id. Statement to get inserted id failed.");
     SSqlStatement::row_t row;
     d_GetLastInsertedKeyIdQuery_stmt->nextRow(row);
     int id = std::stoi(row[0]);
