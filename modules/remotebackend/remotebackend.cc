@@ -405,7 +405,7 @@ bool RemoteBackend::addDomainKey(const DNSName& name, const KeyData& key, int64_
      return false;
 
    id = answer["result"].int_value();
-   return id != -1;
+   return id >= 0;
 }
 
 bool RemoteBackend::activateDomainKey(const DNSName& name, unsigned int id) {

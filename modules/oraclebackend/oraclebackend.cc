@@ -1687,7 +1687,7 @@ OracleBackend::addDomainKey (const DNSName& name, const KeyData& key, int64_t& i
   }
 
   id = key_id;
-  return key_id != -1;
+  return key_id >= 0;
 }
 
 bool
