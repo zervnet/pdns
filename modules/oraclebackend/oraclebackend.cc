@@ -1638,11 +1638,11 @@ OracleBackend::removeDomainKey (const DNSName& name, unsigned int id)
   return true;
 }
 
-int
-OracleBackend::addDomainKey (const DNSName& name, const KeyData& key)
+bool
+OracleBackend::addDomainKey (const DNSName& name, const KeyData& key, int64_t& id)
 {
   if(!d_dnssecQueries)
-    return -1;
+    return false;
   DomainInfo di;
   if (getDomainInfo(name, di) == false) return false;
 
@@ -1686,7 +1686,8 @@ OracleBackend::addDomainKey (const DNSName& name, const KeyData& key)
     throw OracleException("Oracle addDomainKey COMMIT", oraerr);
   }
 
-  return key_id;
+  id = key_id;
+  return key_id != -1;
 }
 
 bool

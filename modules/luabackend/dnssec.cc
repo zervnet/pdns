@@ -312,13 +312,13 @@ bool LUABackend::removeDomainKey(const DNSName& name, unsigned int id) {
     return ok;
 }
 
-int LUABackend::addDomainKey(const DNSName& name, const KeyData& key) {
+bool LUABackend::addDomainKey(const DNSName& name, const KeyData& key, int64_t& id) {
 // there is no logging function in pdnsutil when running this routine?
 
 //key = id, flags, active, content
 
     if(f_lua_adddomainkey == 0) 
-	return -1;
+	return false;
 
     if(logging)
 	//L << Logger::Info << backend_name << "(addDomainKey) BEGIN name: '" << name << "' id: '" << id << endl;
@@ -347,7 +347,6 @@ int LUABackend::addDomainKey(const DNSName& name, const KeyData& key) {
         lua_pop(lua, 1);
 
         throw runtime_error(e);
-        return -1;
     }
 
     size_t returnedwhat = lua_type(lua, -1);
@@ -361,7 +360,7 @@ int LUABackend::addDomainKey(const DNSName& name, const KeyData& key) {
     if(logging)
 	cerr << backend_name << "(addDomainKey) END" << endl;
 	
-    return ok;
+    return ok != -1;
 }
 
 bool LUABackend::getDomainKeys(const DNSName& name, unsigned int kind, std::vector<KeyData>& keys) {
