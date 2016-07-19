@@ -94,8 +94,9 @@ BOOST_AUTO_TEST_CASE(test_method_getAllDomainMetadata) {
 
 BOOST_AUTO_TEST_CASE(test_method_addDomainKey) {
    BOOST_TEST_MESSAGE("Testing addDomainKey method");
-   BOOST_CHECK_EQUAL(be->addDomainKey(DNSName("unit.test."),k1), 1);
-   BOOST_CHECK_EQUAL(be->addDomainKey(DNSName("unit.test."),k2), 2);
+   int64_t id;
+   BOOST_CHECK_EQUAL(be->addDomainKey(DNSName("unit.test."),k1, id), 1);
+   BOOST_CHECK_EQUAL(be->addDomainKey(DNSName("unit.test."),k2, id), 2);
 }
 
 BOOST_AUTO_TEST_CASE(test_method_getDomainKeys) {
