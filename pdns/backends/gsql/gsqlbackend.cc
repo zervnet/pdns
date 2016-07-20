@@ -670,7 +670,8 @@ bool GSQLBackend::addDomainKey(const DNSName& name, const KeyData& key, int64_t&
       throw PDNSException("GSQLBackend unable to get id");
     SSqlStatement::row_t row;
     d_GetLastInsertedKeyIdQuery_stmt->nextRow(row);
-    id = std::stoi(row[0]);
+    ASSERT_ROW_COLUMNS("get-last-inserted-key-id-query", row, 1);
+    int id = std::stoi(row[0]);
     d_GetLastInsertedKeyIdQuery_stmt->reset();
     return true;
   }
