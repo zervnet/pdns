@@ -635,10 +635,9 @@ static void apiZoneCryptokeysDELETE(DNSName zonename, int inquireKeyId, HttpRequ
 static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpResponse *resp, DNSSECKeeper *dk) {
   auto document = req->json();
   auto content = document["content"];
-
   bool active = boolFromJson(document, "active", false);
-
   bool keyOrZone;
+
   if (stringFromJson(document, "keytype") == "ksk") {
     keyOrZone = true;
   } else if (stringFromJson(document, "keytype") == "zsk") {
@@ -646,7 +645,9 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
   } else {
     throw ApiException("Invalid keytype " + stringFromJson(document, "keytype"));
   }
-  int insertedId;
+
+  int64_t insertedId;
+
   if (content.is_null()) {
     int bits = 0;
     auto docbits = document["bits"];
@@ -670,12 +671,10 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
     }
 
     try {
-      insertedId = dk->addKey(zonename, keyOrZone, algorithm, bits, active);
-    }
-    catch (std::runtime_error& error){
+      dk->addKey(zonename, keyOrZone, algorithm, insertedId, bits, active);
+    } catch (std::runtime_error& error) {
       throw ApiException(error.what());
     }
-
     if (insertedId < 0)
       throw ApiException("Adding key failed, perhaps DNSSEC not enabled in configuration?");
   } else if (document["bits"].is_null() && document["algo"].is_null()){
@@ -697,11 +696,9 @@ static void apiZoneCryptokeysPOST(DNSName zonename, HttpRequest *req, HttpRespon
     }
     catch (std::runtime_error& error){
       throw ApiException("Key could not be parsed. Make sure your key format is correct.");
-    }
-    try {
-      insertedId = (*dk).addKey(zonename, dpk, active);
-    }
-    catch (std::runtime_error& error){
+    } try {
+      dk->addKey(zonename, dpk,insertedId, active);
+    } catch (std::runtime_error& error) {
       throw ApiException(error.what());
     }
     if (insertedId < 0)

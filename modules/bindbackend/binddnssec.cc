@@ -56,7 +56,7 @@ bool Bind2Backend::getDomainKeys(const DNSName& name, unsigned int kind, std::ve
 bool Bind2Backend::removeDomainKey(const DNSName& name, unsigned int id)
 { return false; }
 
-int Bind2Backend::addDomainKey(const DNSName& name, const KeyData& key)
+bool Bind2Backend::addDomainKey(const DNSName& name, const KeyData& key, int64_t& id)
 { return -1; }
 
 bool Bind2Backend::activateDomainKey(const DNSName& name, unsigned int id)
@@ -308,10 +308,10 @@ bool Bind2Backend::removeDomainKey(const DNSName& name, unsigned int id)
   return true;
 }
 
-int Bind2Backend::addDomainKey(const DNSName& name, const KeyData& key)
+bool Bind2Backend::addDomainKey(const DNSName& name, const KeyData& key, int64_t& id)
 {
   if(!d_dnssecdb || d_hybrid)
-    return -1;
+    return false;
 
   try {
     d_insertDomainKeyQuery_stmt->
@@ -332,15 +332,15 @@ int Bind2Backend::addDomainKey(const DNSName& name, const KeyData& key)
       throw PDNSException("GSQLBackend unable to get id");
     SSqlStatement::row_t row;
     d_GetLastInsertedKeyIdQuery_stmt->nextRow(row);
-    int id = std::stoi(row[0]);
+    id = std::stoi(row[0]);
     d_GetLastInsertedKeyIdQuery_stmt->reset();
-    return id;
+    return true;
   }
   catch (SSqlException &e) {
     throw PDNSException("DNSSEC database in BIND backend unable to get id: "+e.txtReason());
   }
 
-  return -1;
+  return false;
 }
 
 bool Bind2Backend::activateDomainKey(const DNSName& name, unsigned int id)
