@@ -358,8 +358,7 @@ bool LUABackend::addDomainKey(const DNSName& name, const KeyData& key, int64_t& 
     lua_pop(lua, 1);
 
     if(logging)
-	cerr << backend_name << "(addDomainKey) END" << endl;
-	
+        cerr << backend_name << "(addDomainKey) END" << endl;
     return ok != -1;
 }
 

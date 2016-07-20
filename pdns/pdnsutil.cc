@@ -2239,8 +2239,11 @@ loadMainConfig(g_vm["config-dir"].as<string>());
       cerr<<"Added a " << (keyOrZone ? "KSK" : "ZSK")<<" with algorithm = "<<algorithm<<", active="<<active<<endl;
       if(bits)
         cerr<<"Requested specific key size of "<<bits<<" bits"<<endl;
-      if(id < 0){
-        cout<<std::to_string(id)<<" - Key was added, but backend did not return ID (perhaps not supported by backend?)"<<endl;
+      if(id == -1){
+        cout<<std::to_string(id)<<"Key was added, but backend does not support returning of key id"<<endl;
+      }
+        else if(id < -1){
+        cout<<std::to_string(id)<<"Key was added, but there was a failure while returning the key id"<<endl;
       }
       else {
         cout<<std::to_string(id)<<endl;
@@ -2619,8 +2622,11 @@ loadMainConfig(g_vm["config-dir"].as<string>());
       cerr<<"Adding key failed, perhaps DNSSEC not enabled in configuration?"<<endl;
       exit(1);
     }
-    if(id < 0){
-      cout<<std::to_string(id)<<" - Key was added, but backend did not return ID (perhaps not supported by backend?)"<<endl;
+    if(id == -1){
+      cout<<std::to_string(id)<<"Key was added, but backend does not support returning of key id"<<endl;
+    }
+    else if(id < -1){
+      cout<<std::to_string(id)<<"Key was added, but there was a failure while returning the key id"<<endl;
     }
     else {
       cout<<std::to_string(id)<<endl;
@@ -2665,8 +2671,11 @@ loadMainConfig(g_vm["config-dir"].as<string>());
       cerr<<"Adding key failed, perhaps DNSSEC not enabled in configuration?"<<endl;
       exit(1);
     }
-    if(id < 0){
-      cout<<std::to_string(id)<<" - Key was added, but backend did not return ID (perhaps not supported by backend?)"<<endl;
+    if(id == -1){
+      cout<<std::to_string(id)<<"Key was added, but backend does not support returning of key id"<<endl;
+    }
+    else if(id < -1){
+      cout<<std::to_string(id)<<"Key was added, but there was a failure while returning the key id"<<endl;
     }
     else {
       cout<<std::to_string(id)<<endl;
